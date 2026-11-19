@@ -18,15 +18,22 @@ Drizzle ORM + Neon. **Schema change = edit `src/db/schema.ts` → `pnpm db:gener
 
 ## Picking the next lead to design
 
+Claim it atomically so two sessions never take the same business:
+
 ```sql
-SELECT * FROM leads
-WHERE status = 'new' AND design_ready = false
-ORDER BY review_count * rating DESC
-LIMIT 1;
+UPDATE leads SET status = 'designing', claimed_at = now(), updated_at = now()
+WHERE place_id = (
+  SELECT place_id FROM leads
+  WHERE status = 'new' AND design_ready = false
+  ORDER BY review_count * rating DESC
+  LIMIT 1
+  FOR UPDATE SKIP LOCKED
+)
+RETURNING *;
 ```
 
 1. If `details` is null (it is cleared after 30 days, per Google's terms), fetch it first: `pnpm lead:refresh <place_id>`.
-2. When you start the design: `pnpm lead:status <place_id> designing`.
+2. The claim above already sets `status = 'designing'` and `claimed_at`.
 3. When the design is done: `pnpm lead:status <place_id> design-ready`. This sets `design_ready = true` and `status = 'design_ready'`.
 
 Status flow: `new` → `designing` → `design_ready` → `contacted` → `won` / `lost` / `skipped`.

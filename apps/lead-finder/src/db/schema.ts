@@ -45,6 +45,8 @@ export const leads = pgTable(
     socialUrl: text('social_url'),
     details: jsonb('details').$type<PlaceDetails | null>(),
     detailsFetchedAt: timestamp('details_fetched_at', { withTimezone: true }),
+    // Set when a design session claims the lead, so two sessions never pick the same one.
+    claimedAt: timestamp('claimed_at', { withTimezone: true }),
     designReady: boolean('design_ready').notNull().default(false),
     status: text('status', { enum: LEAD_STATUSES }).notNull().default('new'),
     notes: text('notes'),
