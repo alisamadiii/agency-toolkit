@@ -1,0 +1,42 @@
+# Coolify "Docker Compose" resource — point it at this repo and this file.
+# Coolify builds the image from the Dockerfile and fills the SERVICE_* magic variables automatically.
+# Magic var names derive from the service name: business-tracker -> SERVICE_*_BUSINESS_TRACKER.
+services:
+  business-tracker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - SERVICE_FQDN_BUSINESS_TRACKER_3000
+      - DATABASE_URL=postgres://postgres:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/business_tracker
+      - BETTER_AUTH_SECRET=${SERVICE_BASE64_64_AUTHSECRET}
+      # SERVICE_URL_* includes the https:// scheme Better Auth needs.
+      - BETTER_AUTH_URL=${SERVICE_URL_BUSINESS_TRACKER}
+      - CRON_SECRET=${SERVICE_BASE64_64_CRONSECRET}
+      - TZ=${TZ:-UTC}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/health || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=business_tracker
+    volumes:
+      - bt-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  bt-db:

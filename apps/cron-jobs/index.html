@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cron Jobs</title>
+<style>
+  :root{
+    --bg:#0e1013; --panel:#171a21; --panel-2:#1e222b; --line:#272c37;
+    --text:#e8eaf0; --muted:#8a92a6; --faint:#5a6273;
+    --accent:#fc8464; --ok:#2ecc71; --fail:#e74c3c; --warn:#e67e22;
+    --run:#5b8cff; --idle:#6b7280;
+    --radius:16px; --shadow:0 1px 0 rgba(255,255,255,.03), 0 8px 24px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:radial-gradient(1200px 600px at 50% -200px,#1a1f2b 0%,var(--bg) 60%);
+    color:var(--text); font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    min-height:100vh; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:920px; margin:0 auto; padding:40px 16px 64px}
+  header{display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:28px; flex-wrap:wrap}
+  .brand{display:flex; align-items:center; gap:12px}
+  .dot-brand{width:11px; height:11px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 4px rgba(252,132,100,.15)}
+  h1{font-size:22px; font-weight:650; letter-spacing:-.02em; margin:0}
+  .sub{color:var(--muted); font-size:13px}
+  .updated{color:var(--faint); font-size:12.5px}
+  .grid{display:grid; gap:16px}
+  .card{
+    background:linear-gradient(180deg,var(--panel) 0%,var(--panel-2) 140%);
+    border:1px solid var(--line); border-radius:var(--radius); padding:20px 20px 18px;
+    box-shadow:var(--shadow); position:relative; overflow:hidden;
+  }
+  .card::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--idle)}
+  .card.ok::before{background:var(--ok)} .card.fail::before{background:var(--fail)}
+  .card.running::before{background:var(--run)} .card.never::before{background:var(--warn)}
+  .card.disabled::before{background:var(--idle)} .card.paused::before{background:var(--idle)}
+  .row1{display:flex; align-items:flex-start; justify-content:space-between; gap:14px}
+  .title{font-size:16.5px; font-weight:620; letter-spacing:-.01em; margin:0 0 3px}
+  .desc{color:var(--muted); font-size:13px; margin:0; max-width:52ch}
+  .pill{display:inline-flex; align-items:center; gap:7px; padding:5px 11px; border-radius:999px;
+    font-size:12px; font-weight:600; white-space:nowrap; border:1px solid var(--line); background:#0d1016; color:var(--muted)}
+  .pill .d{width:8px; height:8px; border-radius:50%; background:var(--idle)}
+  .pill.ok{color:#bdf0cf} .pill.ok .d{background:var(--ok)}
+  .pill.fail{color:#f6c2bc} .pill.fail .d{background:var(--fail)}
+  .pill.never{color:#f3d3ad} .pill.never .d{background:var(--warn)}
+  .pill.disabled .d,.pill.paused .d{background:var(--idle)}
+  .pill.running{color:#cfe0ff} .pill.running .d{background:var(--run); animation:pulse 1.1s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(91,140,255,.5)}70%{box-shadow:0 0 0 7px rgba(91,140,255,0)}100%{box-shadow:0 0 0 0 rgba(91,140,255,0)}}
+  .meta{display:flex; flex-wrap:wrap; gap:18px 26px; margin-top:16px; padding-top:15px; border-top:1px solid var(--line)}
+  .meta div{display:flex; flex-direction:column; gap:2px}
+  .meta .k{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--faint)}
+  .meta .v{font-size:13.5px; color:var(--text)}
+  .foot{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:16px}
+  .chip{font-size:12px; color:var(--muted); background:#0d1016; border:1px solid var(--line); padding:4px 10px; border-radius:8px}
+  button.run{
+    appearance:none; border:1px solid rgba(252,132,100,.35); background:rgba(252,132,100,.12); color:#ffd9cc;
+    font:inherit; font-size:13px; font-weight:600; padding:8px 15px; border-radius:10px; cursor:pointer; transition:.15s;
+  }
+  button.run:hover{background:rgba(252,132,100,.2); border-color:rgba(252,132,100,.55)}
+  button.run:disabled{opacity:.5; cursor:not-allowed}
+  .empty{color:var(--muted); text-align:center; padding:60px 0}
+  .toast{position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(20px);
+    background:#20242e; border:1px solid var(--line); color:var(--text); padding:11px 16px; border-radius:12px;
+    box-shadow:var(--shadow); opacity:0; transition:.25s; font-size:13.5px; pointer-events:none}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+  .foot-l{display:flex; align-items:center; gap:8px}
+  button.hist-btn{appearance:none; border:1px solid var(--line); background:transparent; color:var(--muted);
+    font:inherit; font-size:12px; padding:4px 10px; border-radius:8px; cursor:pointer; transition:.15s}
+  button.hist-btn:hover{color:var(--text); border-color:#3a4150}
+  .hist{margin-top:14px; border-top:1px solid var(--line); padding-top:8px}
+  .hmuted{color:var(--faint); font-size:12.5px; padding:6px 0}
+  .hrow{display:grid; grid-template-columns:10px minmax(80px,1fr) auto auto auto auto; gap:12px; align-items:center;
+    padding:8px 6px; border-radius:8px; cursor:pointer; font-size:13px}
+  .hrow:hover{background:rgba(255,255,255,.03)}
+  .hrow .hd{width:8px; height:8px; border-radius:50%; background:var(--idle)}
+  .hrow.ok .hd{background:var(--ok)} .hrow.fail .hd{background:var(--fail)}
+  .hrow .hs{font-weight:600; text-transform:capitalize}
+  .hrow.ok .hs{color:#bdf0cf} .hrow.fail .hs{color:#f6c2bc}
+  .hrow .hm{color:var(--muted); font-size:12.5px}
+  .hlog{margin:0 0 6px; padding:10px 12px; background:#0b0d11; border:1px solid var(--line); border-radius:8px;
+    color:#c9cfdb; font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap; max-height:260px; overflow:auto}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <span class="dot-brand"></span>
+        <div>
+          <h1>Cron Jobs</h1>
+          <div class="sub">Scheduled tasks running on the VPS</div>
+        </div>
+      </div>
+      <div class="updated" id="updated">loading…</div>
+    </header>
+    <div class="grid" id="grid"><div class="empty">Loading crons…</div></div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+<script>
+const GRID = document.getElementById('grid');
+const UPDATED = document.getElementById('updated');
+const TOAST = document.getElementById('toast');
+let toastTimer;
+const openHist = new Set(), openLogs = new Set();   // survive the 8s re-render
+
+function toast(msg){
+  TOAST.textContent = msg; TOAST.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=>TOAST.classList.remove('show'), 2600);
+}
+function rel(iso){
+  if(!iso) return '—';
+  const t = new Date(iso).getTime(); if(isNaN(t)) return iso;
+  const s = Math.round((t - Date.now())/1000), a = Math.abs(s);
+  const u = a<60?[a,'s']:a<3600?[Math.round(a/60),'m']:a<86400?[Math.round(a/3600),'h']:[Math.round(a/86400),'d'];
+  const str = u[0]+u[1];
+  return s<0 ? str+' ago' : 'in '+str;
+}
+function statusInfo(c){
+  if(c.enabled===false) return ['disabled','Disabled'];
+  if(c.last_status==='running') return ['running','Running'];
+  if(c.last_status==='ok') return ['ok','Healthy'];
+  if(c.last_status==='fail') return ['fail','Failed'];
+  if(c.last_status==='paused') return ['paused','Paused'];
+  return ['never','Never run'];
+}
+function card(c){
+  const [cls,label] = statusInfo(c);
+  const el = document.createElement('div');
+  el.className = 'card '+cls;
+  const dur = (c.duration_s!=null) ? c.duration_s+'s' : '—';
+  el.innerHTML = `
+    <div class="row1">
+      <div>
+        <p class="title">${esc(c.title||c.id)}</p>
+        <p class="desc">${esc(c.description||'')}</p>
+      </div>
+      <span class="pill ${cls}"><span class="d"></span>${label}</span>
+    </div>
+    <div class="meta">
+      <div><span class="k">Last run</span><span class="v">${rel(c.last_run)}</span></div>
+      <div><span class="k">Duration</span><span class="v">${dur}</span></div>
+      <div><span class="k">Next run</span><span class="v">${c.enabled===false?'—':rel(c.next_run)}</span></div>
+      <div><span class="k">Trigger</span><span class="v">${esc(c.last_source||'—')}</span></div>
+    </div>
+    <div class="foot">
+      <div class="foot-l">
+        <span class="chip">${esc(c.schedule||'')}</span>
+        <button class="hist-btn" data-id="${esc(c.id)}">${openHist.has(c.id)?'Hide history':'History'}</button>
+      </div>
+      <button class="run" data-id="${esc(c.id)}" ${c.enabled===false?'disabled':''}>Run now</button>
+    </div>
+    <div class="hist" id="hist-${esc(c.id)}" hidden></div>`;
+  el.querySelector('button.run').addEventListener('click', ev=>runNow(ev.target));
+  el.querySelector('button.hist-btn').addEventListener('click', ev=>toggleHistory(ev.target));
+  return el;
+}
+
+function toggleHistory(btn){
+  const id = btn.dataset.id;
+  if(openHist.has(id)){
+    openHist.delete(id); btn.textContent='History';
+    const p=document.getElementById('hist-'+id); if(p){ p.hidden=true; p.innerHTML=''; }
+    return;
+  }
+  openHist.add(id); btn.textContent='Hide history';
+  renderHistory(id);
+}
+
+async function renderHistory(id){
+  const p = document.getElementById('hist-'+id); if(!p) return;
+  p.hidden = false;
+  if(!p.children.length) p.innerHTML = '<div class="hmuted">Loading…</div>';
+  try{
+    const r = await fetch('/api/history/'+id, {cache:'no-store'});
+    const runs = await r.json();
+    if(!runs.length){ p.innerHTML='<div class="hmuted">No runs recorded yet.</div>'; return; }
+    p.innerHTML='';
+    runs.forEach(run=>{
+      const key = id+':'+run.at;
+      const row = document.createElement('div'); row.className='hrow '+(run.status||'');
+      const abs = new Date(run.at).toLocaleString();
+      row.innerHTML = `<span class="hd"></span><span class="ht" title="${esc(abs)}">${rel(run.at)}</span>`+
+        `<span class="hs">${esc(run.status||'')}</span><span class="hm">${run.duration_s!=null?run.duration_s+'s':'—'}</span>`+
+        `<span class="hm">${esc(run.source||'')}</span><span class="hm">exit ${run.exit_code??'—'}</span>`;
+      const pre = document.createElement('pre'); pre.className='hlog';
+      pre.textContent = run.log && run.log.trim() ? run.log : '(no output)';
+      pre.hidden = !openLogs.has(key);
+      row.addEventListener('click', ()=>{ pre.hidden=!pre.hidden; pre.hidden?openLogs.delete(key):openLogs.add(key); });
+      p.appendChild(row); p.appendChild(pre);
+    });
+  }catch(e){ p.innerHTML='<div class="hmuted">Could not load history.</div>'; }
+}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
+async function runNow(btn){
+  const id = btn.dataset.id;
+  btn.disabled = true; btn.textContent = 'Starting…';
+  try{
+    const r = await fetch('/api/run/'+id, {method:'POST'});
+    if(r.status===202){ toast('Started '+id); }
+    else if(r.status===409){ toast(id+' is already running'); }
+    else if(r.status===403){ toast('Set DASHBOARD_USER/PASS to enable Run now'); }
+    else { toast('Could not start ('+r.status+')'); }
+  }catch(e){ toast('Request failed'); }
+  setTimeout(load, 600);
+  setTimeout(()=>{ btn.disabled=false; btn.textContent='Run now'; }, 1500);
+}
+
+async function load(){
+  try{
+    const r = await fetch('/api/status', {cache:'no-store'});
+    const data = await r.json();
+    const crons = Object.values(data.crons||{});
+    if(!crons.length){
+      GRID.innerHTML = '<div class="empty">No crons yet — waiting for first run…</div>';
+    }else{
+      GRID.innerHTML=''; crons.forEach(c=>GRID.appendChild(card(c)));
+      openHist.forEach(id=>renderHistory(id));
+    }
+    UPDATED.textContent = data.updated_at ? 'Updated '+rel(data.updated_at) : 'Starting…';
+  }catch(e){ UPDATED.textContent = 'Connection lost'; }
+}
+load();
+setInterval(load, 8000);
+</script>
+</body>
+</html>

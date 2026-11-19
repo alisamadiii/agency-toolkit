@@ -1,0 +1,7 @@
+{
+  "config": { "city": "Jacksonville", "state": "FL" },
+  "days": [
+    { "date": "2026-01-05", "city": "Jacksonville", "state": "FL", "industries": ["plumbers"], "scannedAt": "2026-01-05T12:00:00.000Z", "scanErrors": {} }
+  ],
+  "leads": []
+}

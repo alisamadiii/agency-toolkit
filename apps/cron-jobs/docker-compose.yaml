@@ -1,0 +1,57 @@
+services:
+  cron-jobs:
+    build: .
+    restart: unless-stopped
+    environment:
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}
+      # --- per-cron Discord webhooks (each cron posts to its own channel) ---
+      - UPTIME_WEBHOOK_URL=${UPTIME_WEBHOOK_URL:-}
+      - SECURITY_WEBHOOK_URL=${SECURITY_WEBHOOK_URL:-}
+      # Migration fallback: a cron with no webhook of its own uses this. Remove
+      # once UPTIME_WEBHOOK_URL / SECURITY_WEBHOOK_URL are set.
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      # --- dashboard (http://<vps-ip>:DASHBOARD_HOST_PORT) ---
+      # DASHBOARD_USER + DASHBOARD_PASS gate the page and are REQUIRED for the
+      # "Run now" button. Also allow-list the port to your IP in the VPS firewall.
+      # (The container always listens on 8080; only the host port is configurable.)
+      - DASHBOARD_USER=${DASHBOARD_USER:-}
+      - DASHBOARD_PASS=${DASHBOARD_PASS:-}
+      # --- site-uptime cron ---
+      # Empty SITES => sites.json (or sites.example.json) governs (notes, must_contain, enabled).
+      - SITES=${SITES:-}
+      - CHECK_EVERY_HOURS=${CHECK_EVERY_HOURS:-2}     # overrides the 2h default in crons.py
+      - DAILY_SUMMARY=${DAILY_SUMMARY:-false}          # true => full report every uptime run
+      # --- security-scan cron ---
+      - WEBCHECK_URL=${WEBCHECK_URL:-http://web-check:3000}
+      - WEBCHECK_PUBLIC_URL=${WEBCHECK_PUBLIC_URL:-}
+      - SECURITY_EVERY_HOURS=${SECURITY_EVERY_HOURS:-168}  # overrides the weekly default
+      # --- shared ---
+      - TZ=${TZ:-America/New_York}
+      - RUN_ON_START=${RUN_ON_START:-false}
+    ports:
+      # Publish the dashboard on the host. 18080 avoids Coolify's own 8080.
+      # Auth + VPS firewall are what keep it private.
+      - "${DASHBOARD_HOST_PORT:-18080}:8080"
+    volumes:
+      - monitor-data:/data
+    # Hard caps so a scan or Claude run can never starve the rest of the box.
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+          cpus: "1.5"
+
+  # Attack-surface scanner. Internal only - give it no domain in Coolify.
+  web-check:
+    image: lissy93/web-check
+    restart: unless-stopped
+    expose:
+      - "3000"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+
+volumes:
+  monitor-data:

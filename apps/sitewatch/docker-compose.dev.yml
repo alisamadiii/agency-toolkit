@@ -1,0 +1,22 @@
+# Local development: Postgres only. Run the app with `pnpm dev`.
+# Separate project name so it never collides with the full stack (docker-compose.yml).
+name: website-tracker-dev
+services:
+  postgres:
+    image: postgres:17-alpine
+    ports:
+      - '5434:5432'
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=website_tracker
+    volumes:
+      - wt-dev-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  wt-dev-db:

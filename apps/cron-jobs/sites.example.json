@@ -1,0 +1,5 @@
+[
+  { "name": "Example Agency", "url": "https://example.com", "must_contain": "Example Domain" },
+  { "name": "Example Client", "url": "https://example.org", "notes": "Static site, hosted on Netlify." },
+  { "name": "Paused Client", "url": "https://example.net", "enabled": false }
+]

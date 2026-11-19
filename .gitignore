@@ -1,0 +1,21 @@
+# deps / builds
+node_modules/
+.next/
+dist/
+build/
+out/
+DerivedData/
+__pycache__/
+*.pyc
+
+# env
+.env
+.env.*
+!.env.example
+
+# local data
+apps/call-tracker/data/db.json
+apps/call-tracker/recordings/
+apps/cron-jobs/sites.json
+
+.DS_Store
