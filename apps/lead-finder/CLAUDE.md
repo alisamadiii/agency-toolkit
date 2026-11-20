@@ -32,6 +32,8 @@ WHERE place_id = (
 RETURNING *;
 ```
 
+If Ali gives a place ID (copied from the dashboard's Leads table), design that lead instead: `SELECT * FROM leads WHERE place_id = '<id>'`. Refuse if its status is `hidden`.
+
 1. If `details` is null (it is cleared after 30 days, per Google's terms), fetch it first: `pnpm lead:refresh <place_id>`.
 2. The claim above already sets `status = 'designing'` and `claimed_at`.
 3. When the design is done: `pnpm lead:status <place_id> design-ready`. This sets `design_ready = true` and `status = 'design_ready'`.

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Check, Eye, EyeOff, Search } from 'lucide-react';
+import { Check, Copy, Eye, EyeOff, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { updateLead } from '@/app/actions/leads';
@@ -68,6 +68,15 @@ export function LeadsTable({
     }
   }
 
+  async function copyId(l: Row) {
+    try {
+      await navigator.clipboard.writeText(l.placeId);
+      toast.success(`Copied ID for ${l.name}`);
+    } catch {
+      toast.error('Could not copy to clipboard');
+    }
+  }
+
   React.useEffect(() => {
     if (q === filters.q) return;
     const id = setTimeout(() => setParam('q', q), 300);
@@ -123,7 +132,7 @@ export function LeadsTable({
             <TableHead className="hidden lg:table-cell">Phone</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="hidden text-right sm:table-cell">Found</TableHead>
-            <TableHead className="w-12 pr-4" />
+            <TableHead className="w-20 pr-4" />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -165,7 +174,19 @@ export function LeadsTable({
               >
                 {ago(l.firstSeenAt)}
               </TableCell>
-              <TableCell className="pr-4 text-right">
+              <TableCell className="pr-4 text-right whitespace-nowrap">
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  title="Copy place ID"
+                  className="text-muted-foreground md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void copyId(l);
+                  }}
+                >
+                  <Copy />
+                </Button>
                 {l.status === 'hidden' ? (
                   <Button
                     size="icon-sm"

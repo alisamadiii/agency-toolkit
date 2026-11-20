@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ExternalLink, Eye, EyeOff, Loader2, MapPin, Phone, RefreshCw, Star } from 'lucide-react';
+import { Copy, ExternalLink, Eye, EyeOff, Loader2, MapPin, Phone, RefreshCw, Star } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { refreshDetails, updateLead } from '@/app/actions/leads';
@@ -101,6 +101,18 @@ function LeadDetail({ lead }: { lead: Lead }) {
               </a>
             </Button>
           )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              navigator.clipboard.writeText(lead.placeId).then(
+                () => toast.success('Place ID copied'),
+                () => toast.error('Could not copy to clipboard')
+              )
+            }
+          >
+            <Copy /> Copy ID
+          </Button>
           {lead.status === 'hidden' ? (
             <Button size="sm" variant="outline" disabled={pending} onClick={() => patch({ status: 'new' }, 'Lead restored')}>
               <Eye /> Unhide
