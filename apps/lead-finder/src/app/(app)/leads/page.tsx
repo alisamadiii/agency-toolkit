@@ -1,4 +1,4 @@
-import { and, desc, eq, getTableColumns, ilike, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, getTableColumns, ilike, ne, or, sql, type SQL } from 'drizzle-orm';
 
 import { PageHeader } from '@/components/page-header';
 import { db } from '@/db';
@@ -21,6 +21,8 @@ export default async function LeadsPage({ searchParams }: PageProps<'/leads'>) {
   const where: SQL[] = [];
   if (status && LEAD_STATUSES.includes(status as LeadStatus)) {
     where.push(eq(leads.status, status as LeadStatus));
+  } else {
+    where.push(ne(leads.status, 'hidden'));
   }
   if (category) where.push(eq(leads.category, category));
   if (q) where.push(or(ilike(leads.name, `%${q}%`), ilike(leads.address, `%${q}%`))!);

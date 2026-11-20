@@ -301,7 +301,7 @@ async function purgeOldDetails() {
     .set({ details: null, updatedAt: new Date() })
     .where(
       and(
-        inArray(leads.status, ['new', 'skipped']),
+        inArray(leads.status, ['new', 'skipped', 'hidden']),
         lt(leads.detailsFetchedAt, sql`now() - make_interval(days => ${DETAILS_TTL_DAYS})`),
         sql`${leads.details} is not null`
       )

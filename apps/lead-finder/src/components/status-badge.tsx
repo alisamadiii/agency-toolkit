@@ -10,6 +10,7 @@ const LEAD_TONE: Record<LeadStatus, string> = {
   won: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
   lost: 'bg-rose-500/10 text-rose-700 dark:text-rose-300',
   skipped: 'bg-muted text-muted-foreground',
+  hidden: 'bg-muted text-muted-foreground/70',
 };
 
 export const statusLabel = (s: string) => s.replace('_', ' ');

@@ -2,9 +2,13 @@
 
 import * as React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Check, Search } from 'lucide-react';
+import { Check, Eye, EyeOff, Search } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { updateLead } from '@/app/actions/leads';
 
 import { LeadStatusBadge, statusLabel } from '@/components/status-badge';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
@@ -22,7 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { LEAD_STATUSES, type Lead } from '@/db/schema';
+import { LEAD_STATUSES, type Lead, type LeadStatus } from '@/db/schema';
 import { ago } from '@/lib/format';
 
 type Row = Omit<Lead, 'details'>;
@@ -52,6 +56,18 @@ export function LeadsTable({
     [pathname, router, searchParams]
   );
 
+  async function setStatus(placeId: string, status: LeadStatus, undo?: LeadStatus) {
+    const res = await updateLead(placeId, { status });
+    if (res.error) return toast.error(res.error);
+    if (undo) {
+      toast.success('Lead hidden', {
+        action: { label: 'Undo', onClick: () => void setStatus(placeId, undo) },
+      });
+    } else {
+      toast.success(status === 'hidden' ? 'Lead hidden' : 'Lead restored');
+    }
+  }
+
   React.useEffect(() => {
     if (q === filters.q) return;
     const id = setTimeout(() => setParam('q', q), 300);
@@ -75,7 +91,7 @@ export function LeadsTable({
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>All statuses</SelectItem>
+            <SelectItem value={ALL}>All but hidden</SelectItem>
             {LEAD_STATUSES.map((s) => (
               <SelectItem key={s} value={s} className="capitalize">
                 {statusLabel(s)}
@@ -106,13 +122,14 @@ export function LeadsTable({
             <TableHead className="hidden md:table-cell">Distance</TableHead>
             <TableHead className="hidden lg:table-cell">Phone</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead className="hidden pr-4 text-right sm:table-cell">Found</TableHead>
+            <TableHead className="hidden text-right sm:table-cell">Found</TableHead>
+            <TableHead className="w-12 pr-4" />
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+              <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
                 No leads match. Run the finder from Settings or loosen the filters.
               </TableCell>
             </TableRow>
@@ -120,7 +137,7 @@ export function LeadsTable({
           {rows.map((l) => (
             <TableRow
               key={l.placeId}
-              className="cursor-pointer"
+              className="group cursor-pointer"
               onClick={() => setParam('lead', l.placeId)}
             >
               <TableCell className="max-w-72 pl-4">
@@ -143,10 +160,38 @@ export function LeadsTable({
                 <LeadStatusBadge status={l.status} />
               </TableCell>
               <TableCell
-                className="hidden pr-4 text-right text-muted-foreground sm:table-cell"
+                className="hidden text-right text-muted-foreground sm:table-cell"
                 suppressHydrationWarning
               >
                 {ago(l.firstSeenAt)}
+              </TableCell>
+              <TableCell className="pr-4 text-right">
+                {l.status === 'hidden' ? (
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    title="Unhide (back to new)"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void setStatus(l.placeId, 'new');
+                    }}
+                  >
+                    <Eye />
+                  </Button>
+                ) : (
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    title="Hide this lead"
+                    className="text-muted-foreground md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void setStatus(l.placeId, 'hidden', l.status);
+                    }}
+                  >
+                    <EyeOff />
+                  </Button>
+                )}
               </TableCell>
             </TableRow>
           ))}

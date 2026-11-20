@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ExternalLink, Loader2, MapPin, Phone, RefreshCw, Star } from 'lucide-react';
+import { ExternalLink, Eye, EyeOff, Loader2, MapPin, Phone, RefreshCw, Star } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { refreshDetails, updateLead } from '@/app/actions/leads';
@@ -99,6 +99,15 @@ function LeadDetail({ lead }: { lead: Lead }) {
               <a href={lead.socialUrl} target="_blank" rel="noreferrer">
                 <ExternalLink /> Social page
               </a>
+            </Button>
+          )}
+          {lead.status === 'hidden' ? (
+            <Button size="sm" variant="outline" disabled={pending} onClick={() => patch({ status: 'new' }, 'Lead restored')}>
+              <Eye /> Unhide
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" disabled={pending} onClick={() => patch({ status: 'hidden' }, 'Lead hidden')}>
+              <EyeOff /> Hide
             </Button>
           )}
         </div>

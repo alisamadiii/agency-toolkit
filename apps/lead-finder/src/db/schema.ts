@@ -22,6 +22,8 @@ export const LEAD_STATUSES = [
   'won',
   'lost',
   'skipped',
+  // Hidden from the default list and never picked for a design.
+  'hidden',
 ] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
 

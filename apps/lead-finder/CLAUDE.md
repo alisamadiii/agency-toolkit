@@ -36,6 +36,6 @@ RETURNING *;
 2. The claim above already sets `status = 'designing'` and `claimed_at`.
 3. When the design is done: `pnpm lead:status <place_id> design-ready`. This sets `design_ready = true` and `status = 'design_ready'`.
 
-Status flow: `new` → `designing` → `design_ready` → `contacted` → `won` / `lost` / `skipped`.
+Status flow: `new` → `designing` → `design_ready` → `contacted` → `won` / `lost` / `skipped`. `hidden` = Ali hid it from the dashboard; never design a hidden lead (the query above only picks `new`).
 
 `details` holds the full Place Details response: `reviews`, `photos` (photo `name`s, which are served locally by `/api/photo/<name>`), `regularOpeningHours`, `editorialSummary`, `types` and `priceLevel`. Use it for copy, hours and imagery in the design.

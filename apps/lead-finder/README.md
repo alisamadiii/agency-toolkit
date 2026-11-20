@@ -23,7 +23,7 @@ Both parts use the same Neon database. When you change the run time in the local
    - it is inside the radius (haversine distance)
    - it is not already in `leads`
 4. Candidates are ranked by `rating × review_count`. Place Details (reviews, photos, hours…) is fetched for the top N only.
-5. Leads are inserted with `ON CONFLICT DO NOTHING`. `details` older than 30 days is cleared for `new`/`skipped` leads, because Google's terms only allow keeping Place IDs long-term.
+5. Leads are inserted with `ON CONFLICT DO NOTHING`. `details` older than 30 days is cleared for `new`/`skipped`/`hidden` leads, because Google's terms only allow keeping Place IDs long-term.
 6. A Discord summary is sent if Discord is enabled, and the run is logged in `runs`.
 
 Cost control: `max_api_calls_per_run` caps every request, retries included. Google 429 and 5xx responses are retried with backoff, and one failed request never stops the run.
@@ -64,7 +64,7 @@ All other settings live in the database and are edited in the dashboard.
 | `pnpm scheduler` | The production service: cron + `/health` |
 | `pnpm worker` | One full run now |
 | `pnpm worker --dry-run` | Search and print results; nothing is written or sent |
-| `pnpm lead:status <place_id> <status>` | `new`, `designing`, `design_ready`, `contacted`, `won`, `lost`, `skipped`, `design-ready`, `not-design-ready` |
+| `pnpm lead:status <place_id> <status>` | `new`, `designing`, `design_ready`, `contacted`, `won`, `lost`, `skipped`, `hidden`, `design-ready`, `not-design-ready` |
 | `pnpm lead:refresh <place_id>` | Fetch fresh Place Details for one lead |
 | `pnpm db:generate` / `pnpm db:migrate` | Drizzle migrations. To change the schema: edit `src/db/schema.ts` → generate → commit → migrate. Never use `push`. |
 | `pnpm test` | Vitest: social detection, haversine, grid, filter, timezone |
