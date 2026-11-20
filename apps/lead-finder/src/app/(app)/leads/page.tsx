@@ -36,7 +36,8 @@ export default async function LeadsPage({ searchParams }: PageProps<'/leads'>) {
       .select(listColumns)
       .from(leads)
       .where(where.length ? and(...where) : undefined)
-      .orderBy(desc(leads.firstSeenAt), desc(sql`${leads.reviewCount} * ${leads.rating}`))
+      // Same ranking the design skill uses to pick the next lead.
+      .orderBy(sql`${leads.reviewCount} * ${leads.rating} desc nulls last`, desc(leads.firstSeenAt))
       .limit(500),
     getSettings(),
     selectedId
