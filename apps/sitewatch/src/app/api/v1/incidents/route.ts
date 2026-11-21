@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { clients, incidents } from '@/db/schema';
 import { resolveApiUser, unauthorized } from '@/lib/api-key';
+import { findSite } from '@/lib/site-lookup';
 
 const DETAIL_NOISE_KEYS = ['fingerKey', 'runId', 'screenshot', 'box'];
 
@@ -14,17 +15,18 @@ export async function GET(request: NextRequest) {
   const site = request.nextUrl.searchParams.get('site');
   const includeResolved =
     request.nextUrl.searchParams.get('include_resolved') === '1';
+  // Open problems including muted ones (ignoredAt tells them apart).
+  const includeMuted = request.nextUrl.searchParams.get('include_muted') === '1';
 
   const filters: SQL[] = [eq(clients.userId, user.id)];
   if (!includeResolved) {
     filters.push(isNull(incidents.resolvedAt));
-    filters.push(isNull(incidents.ignoredAt));
+    if (!includeMuted) filters.push(isNull(incidents.ignoredAt));
   }
   if (site) {
-    const isUuid = /^[0-9a-f-]{36}$/i.test(site);
-    filters.push(
-      isUuid ? eq(clients.id, site) : eq(clients.baseUrl, normalizeSite(site))
-    );
+    const client = await findSite(user.id, site);
+    if (!client) return NextResponse.json({ incidents: [] });
+    filters.push(eq(clients.id, client.id));
   }
 
   const rows = await db
@@ -47,6 +49,7 @@ export async function GET(request: NextRequest) {
       firstSeenAt: incident.firstSeenAt.toISOString(),
       lastSeenAt: incident.lastSeenAt.toISOString(),
       resolvedAt: incident.resolvedAt?.toISOString() ?? null,
+      ignoredAt: incident.ignoredAt?.toISOString() ?? null,
     })),
   });
 }
@@ -59,7 +62,3 @@ function cleanDetails(details: Record<string, unknown> | null) {
   return Object.keys(out).length > 0 ? out : null;
 }
 
-function normalizeSite(site: string): string {
-  if (/^https?:\/\//i.test(site)) return site.replace(/\/$/, '');
-  return `https://${site.replace(/\/$/, '')}`;
-}

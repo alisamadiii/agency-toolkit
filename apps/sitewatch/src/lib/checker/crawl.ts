@@ -24,7 +24,7 @@ declare global {
   var __wtActiveCrawls: Set<string> | undefined;
 }
 
-function activeCrawls(): Set<string> {
+export function activeCrawls(): Set<string> {
   globalThis.__wtActiveCrawls ??= new Set();
   return globalThis.__wtActiveCrawls;
 }

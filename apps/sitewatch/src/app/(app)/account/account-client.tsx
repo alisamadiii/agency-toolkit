@@ -145,7 +145,8 @@ export function AccountClient({ profile, apiKey, counts }: Props) {
             </p>
             <p>
               <code>GET /api/v1/incidents</code> — open problems (
-              <code>?site=domain.com</code>, <code>?include_resolved=1</code>)
+              <code>?site=domain.com</code>, <code>?include_resolved=1</code>,{' '}
+              <code>?include_muted=1</code>)
             </p>
             <p>
               <code>GET /api/v1/runs</code> — check history (
@@ -154,6 +155,23 @@ export function AccountClient({ profile, apiKey, counts }: Props) {
             <p>
               <code>POST /api/v1/sites</code> — add a website:{' '}
               <code>{'{"url": "domain.com"}'}</code>
+            </p>
+            <p>
+              <code>GET /api/v1/sites/:site</code> — one website&apos;s
+              dashboard: status, uptime %, response times, SSL and domain
+              expiry (<code>:site</code> = id or domain)
+            </p>
+            <p>
+              <code>GET /api/v1/sites/:site/pages</code>,{' '}
+              <code>/endpoints</code> — pages with problem counts, endpoint
+              statuses
+            </p>
+            <p>
+              <code>POST /api/v1/sites/:site/run</code> — run a check now
+            </p>
+            <p>
+              <code>POST|DELETE /api/v1/sites/:site/incidents/:id/mute</code>{' '}
+              — mute or un-mute a problem
             </p>
             <p>
               Auth: <code>x-api-key</code> header or <code>?api_key=</code>{' '}
