@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { desc, eq, gte, sql } from 'drizzle-orm';
+import { desc, eq, getTableColumns, gte, sql } from 'drizzle-orm';
 import { ArrowRight, CalendarClock, MapPin, Palette, Sparkles, Store, Zap } from 'lucide-react';
 
 import { LeadsChart } from '@/components/leads-chart';
@@ -11,6 +11,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { db } from '@/db';
 import { leads, runs } from '@/db/schema';
 import { ago, dateTime } from '@/lib/format';
+import { homePoint, milesFromHome } from '@/lib/distance-sql';
 import { getSettings } from '@/lib/jobs/settings';
 import { nextRunAt, zonedParts } from '@/lib/time';
 
@@ -46,7 +47,7 @@ async function loadOverview() {
       .from(runs)
       .where(gte(runs.startedAt, new Date(now - 7 * 86_400_000))),
     db
-      .select()
+      .select({ ...getTableColumns(leads), distanceMiles: milesFromHome(homePoint(s)) })
       .from(leads)
       .where(eq(leads.status, 'new'))
       .orderBy(desc(sql`${leads.reviewCount} * ${leads.rating}`))

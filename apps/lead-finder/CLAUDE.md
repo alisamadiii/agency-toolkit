@@ -40,4 +40,12 @@ If Ali gives a place ID (copied from the dashboard's Leads table), design that l
 
 Status flow: `new` → `designing` → `design_ready` → `contacted` → `won` / `lost` / `skipped`. `hidden` = Ali hid it from the dashboard; never design a hidden lead (the query above only picks `new`).
 
+Ali also changes `status` from his phone with the Agency iOS app (`apps/agency`), so a lead he already designed elsewhere or ruled out will not be `new`. Trust the status in the database.
+
+NFC review cards: `review_link` holds the Google "write a review" link (filled on insert, backfilled by migration 0002; Ali may overwrite it with the owner's `g.page/r/.../review` link). `nfc_cards_written_at` is set by the Agency iOS app when it writes that link onto a card. Ali can also add leads from the app; those rows have `details` null until `pnpm lead:refresh`. The app connects as the Postgres role `agency_ios`, which has column-level grants only: read lead basics (incl. `lat`, `lng`, `distance_miles`, `phone`, `google_maps_url`) plus `settings.home_lat/home_lng/categories`, insert basic lead columns, update `status`, `design_ready`, `review_link`, `nfc_cards_written_at` and `updated_at`, and has full access to `routes` / `route_stops`. A new column the app needs must be granted to that role.
+
+Distance: the dashboard and the iOS app sort leads nearest to home first, with miles computed live in SQL from `lat`/`lng` and `settings.home_lat/home_lng` (`milesFromHome()` in `src/lib/distance-sql.ts`). The stored `distance_miles` is measured from the home set when the lead was found and is stale for older leads; don't sort or filter on it.
+
+Smart Route: `routes` and `route_stops` (migration 0003) belong to the Agency iOS app. It builds a day's visiting route from picked leads, orders stops with the Google Routes API and marks each stop visited/failed. The dashboard doesn't read them; don't change them from lead-finder code.
+
 `details` holds the full Place Details response: `reviews`, `photos` (photo `name`s, which are served locally by `/api/photo/<name>`), `regularOpeningHours`, `editorialSummary`, `types` and `priceLevel`. Use it for copy, hours and imagery in the design.

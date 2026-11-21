@@ -10,6 +10,7 @@ The self-hosted tools I use to run a small web agency: finding leads, calling th
 | [cron-jobs](apps/cron-jobs) | One container that runs scheduled jobs (site uptime, weekly security scan), each posting to Discord, with a small dashboard. | Python (stdlib only), Docker |
 | [email-tracker](apps/email-tracker) | Tracks which email address you used for which service, plus subscriptions and renewal dates. | Next.js, Drizzle, Better Auth |
 | [clients-browser](apps/clients-browser) | A native macOS browser with one isolated profile per client, and an encrypted backup to iCloud Drive. | Swift, SwiftUI, WebKit |
+| [agency](apps/agency) | A native iOS hub of business tools. First tool: Review Cards, which turns a Google place into a review link and writes or verifies it on NFC cards. | Swift, SwiftUI, Core NFC, SwiftData |
 
 ## Getting started
 

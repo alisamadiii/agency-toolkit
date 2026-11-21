@@ -1,8 +1,9 @@
-import { and, desc, eq, getTableColumns, ilike, ne, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, getTableColumns, ilike, ne, or, sql, type SQL } from 'drizzle-orm';
 
 import { PageHeader } from '@/components/page-header';
 import { db } from '@/db';
 import { LEAD_STATUSES, leads, type LeadStatus } from '@/db/schema';
+import { homePoint, milesFromHome } from '@/lib/distance-sql';
 import { getSettings } from '@/lib/jobs/settings';
 
 import { LeadSheet } from './lead-sheet';
@@ -31,17 +32,24 @@ export default async function LeadsPage({ searchParams }: PageProps<'/leads'>) {
   const { details: _details, ...listColumns } = getTableColumns(leads);
   void _details;
 
-  const [rows, settings, selected] = await Promise.all([
+  const settings = await getSettings();
+  // Live miles from the current home point; the stored distance_miles goes stale when home moves.
+  const miles = milesFromHome(homePoint(settings));
+
+  const [rows, selected] = await Promise.all([
     db
-      .select(listColumns)
+      .select({ ...listColumns, distanceMiles: miles })
       .from(leads)
       .where(where.length ? and(...where) : undefined)
-      // Same ranking the design skill uses to pick the next lead.
-      .orderBy(sql`${leads.reviewCount} * ${leads.rating} desc nulls last`, desc(leads.firstSeenAt))
+      // Nearest to home first; ties go to the stronger lead (review_count * rating).
+      .orderBy(asc(miles), sql`${leads.reviewCount} * ${leads.rating} desc nulls last`)
       .limit(500),
-    getSettings(),
     selectedId
-      ? db.select().from(leads).where(eq(leads.placeId, selectedId)).then((r) => r[0] ?? null)
+      ? db
+          .select({ ...getTableColumns(leads), distanceMiles: miles })
+          .from(leads)
+          .where(eq(leads.placeId, selectedId))
+          .then((r) => r[0] ?? null)
       : Promise.resolve(null),
   ]);
 

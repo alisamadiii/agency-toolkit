@@ -49,6 +49,11 @@ export const leads = pgTable(
     detailsFetchedAt: timestamp('details_fetched_at', { withTimezone: true }),
     // Set when a design session claims the lead, so two sessions never pick the same one.
     claimedAt: timestamp('claimed_at', { withTimezone: true }),
+    // Google "write a review" link for NFC review cards. Filled on insert; may be
+    // overwritten with the owner's g.page/r/.../review link. The Agency iOS app reads it.
+    reviewLink: text('review_link'),
+    // Last time the Agency iOS app wrote this lead's review link onto an NFC card.
+    nfcCardsWrittenAt: timestamp('nfc_cards_written_at', { withTimezone: true }),
     designReady: boolean('design_ready').notNull().default(false),
     status: text('status', { enum: LEAD_STATUSES }).notNull().default('new'),
     notes: text('notes'),
@@ -63,6 +68,71 @@ export const leads = pgTable(
     index('leads_design_ready_idx').on(t.designReady),
     index('leads_status_idx').on(t.status),
     index('leads_category_idx').on(t.category),
+  ]
+);
+
+// ---------- Routes (Agency iOS "Smart Route") ----------
+// Owned by the Agency iOS app: it creates a route from picked leads, orders the
+// stops with the Google Routes API and marks each visit. The dashboard doesn't read them.
+
+export const ROUTE_STATUSES = ['planned', 'active', 'done'] as const;
+export type RouteStatus = (typeof ROUTE_STATUSES)[number];
+
+export const STOP_STATUSES = ['pending', 'visited', 'failed'] as const;
+export type StopStatus = (typeof STOP_STATUSES)[number];
+
+export const routes = pgTable(
+  'routes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    status: text('status', { enum: ROUTE_STATUSES }).notNull().default('planned'),
+    startLat: doublePrecision('start_lat').notNull(),
+    startLng: doublePrecision('start_lng').notNull(),
+    // Null end = the route ends at its last stop.
+    endLat: doublePrecision('end_lat'),
+    endLng: doublePrecision('end_lng'),
+    distanceMeters: integer('distance_meters'),
+    durationSeconds: integer('duration_seconds'),
+    // Last leg: final stop to the end point (null when the route ends at its last stop).
+    returnDurationSeconds: integer('return_duration_seconds'),
+    returnDistanceMeters: integer('return_distance_meters'),
+    returnPolyline: text('return_polyline'),
+    optimizedAt: timestamp('optimized_at', { withTimezone: true }),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index('routes_created_at_idx').on(t.createdAt)]
+);
+
+export const routeStops = pgTable(
+  'route_stops',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    routeId: uuid('route_id')
+      .notNull()
+      .references(() => routes.id, { onDelete: 'cascade' }),
+    placeId: text('place_id')
+      .notNull()
+      .references(() => leads.placeId, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    status: text('status', { enum: STOP_STATUSES }).notNull().default('pending'),
+    failureReason: text('failure_reason'),
+    // The drive that arrives at this stop, from the Routes API.
+    legDurationSeconds: integer('leg_duration_seconds'),
+    legDistanceMeters: integer('leg_distance_meters'),
+    legPolyline: text('leg_polyline'),
+    visitedAt: timestamp('visited_at', { withTimezone: true }),
+  },
+  (t) => [
+    unique('route_stops_route_place').on(t.routeId, t.placeId),
+    index('route_stops_route_idx').on(t.routeId),
   ]
 );
 
@@ -170,4 +240,6 @@ export type PlaceDetails = {
 export type Lead = typeof leads.$inferSelect;
 export type Run = typeof runs.$inferSelect;
 export type Settings = typeof settings.$inferSelect;
+export type Route = typeof routes.$inferSelect;
+export type RouteStop = typeof routeStops.$inferSelect;
 export type NotificationChannel = typeof notificationChannels.$inferSelect;

@@ -12,6 +12,7 @@ import {
 } from '@/db/schema';
 import { filterCandidates, leadScore, type Candidate } from '@/lib/filter';
 import { seedGrid } from '@/lib/geo';
+import { reviewLinkFor } from '@/lib/review-link';
 import { BudgetExceededError, PlacesClient } from '@/lib/google';
 import { DASHBOARD_URL, sendAlert } from '@/lib/notifications/dispatch';
 
@@ -191,6 +192,7 @@ export async function runLeadFinder(opts: {
           socialUrl: c.socialUrl,
           details,
           detailsFetchedAt: details ? new Date() : null,
+          reviewLink: reviewLinkFor(c.place.id),
         })
         .onConflictDoNothing({ target: leads.placeId })
         .returning({ placeId: leads.placeId });
