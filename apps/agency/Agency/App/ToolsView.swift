@@ -4,6 +4,7 @@ import SwiftUI
 enum Tool: Hashable {
   case reviewCards
   case smartRoute
+  case nfc
 }
 
 /// Root screen: one row per tool.
@@ -37,6 +38,14 @@ struct ToolsView: View {
               tint: .green
             )
           }
+          NavigationLink(value: Tool.nfc) {
+            ToolRow(
+              title: "NFC Cards",
+              subtitle: "Verify or write any NFC card",
+              symbol: "sensor.tag.radiowaves.forward.fill",
+              tint: .orange
+            )
+          }
         } footer: {
           Text("More tools will show up here as they are built.")
         }
@@ -46,6 +55,7 @@ struct ToolsView: View {
         switch tool {
         case .reviewCards: BusinessListView()
         case .smartRoute: RouteListView()
+        case .nfc: NFCToolView()
         }
       }
       .navigationDestination(for: Business.self) { business in
@@ -81,12 +91,13 @@ struct ToolsView: View {
     #endif
     .onAppear {
       #if DEBUG
-      // Simulator screenshots: `SIMCTL_CHILD_AGENCY_OPEN=reviewCards|smartRoute`
+      // Simulator screenshots: `SIMCTL_CHILD_AGENCY_OPEN=reviewCards|smartRoute|nfc`
       // and `SIMCTL_CHILD_AGENCY_ROUTE=<route uuid>` to open a route's map.
       let env = ProcessInfo.processInfo.environment
       guard router.path.isEmpty else { return }
       switch env["AGENCY_OPEN"] {
       case "reviewCards": router.path.append(Tool.reviewCards)
+      case "nfc": router.path.append(Tool.nfc)
       case "smartRoute":
         router.path.append(Tool.smartRoute)
         if let id = env["AGENCY_ROUTE"] { router.path.append(RouteRef(id: id, name: "Route")) }

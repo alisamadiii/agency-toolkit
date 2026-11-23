@@ -2,11 +2,13 @@
 import Foundation
 
 /// What we learned from one tap.
-nonisolated struct TagReadResult: Sendable {
+nonisolated struct TagReadResult: Sendable, Equatable {
   /// Chip UID, hex, uppercase.
   let uid: String
   /// URL stored in the first NDEF URI record, if any.
   let url: URL?
+  /// Text stored in the first NDEF Text record, if any.
+  let text: String?
   /// Whether the tag is NDEF and writable.
   let isWritable: Bool
   /// Writable bytes on the chip.
@@ -30,14 +32,20 @@ nonisolated enum NFCError: LocalizedError {
     case .unsupportedTag: "That card isn't a supported NFC tag."
     case .notNDEF: "That card isn't NDEF formatted."
     case .readOnly: "That card is locked (read-only) and can't be written."
-    case .tooLarge(let needed, let capacity): "Link needs \(needed) bytes; card holds \(capacity)."
-    case .verifyMismatch: "Written, but reading it back gave a different link."
+    case .tooLarge(let needed, let capacity): "Content needs \(needed) bytes; card holds \(capacity)."
+    case .verifyMismatch: "Written, but reading it back gave something different."
     case .system(let message): message
     }
   }
 }
 
-/// One tag session per call. Writes a single URI record; never locks the tag.
+/// What gets written to a card: one NDEF record.
+nonisolated enum NFCContent: Sendable, Equatable {
+  case url(URL)
+  case text(String)
+}
+
+/// One tag session per call. Writes a single URI or Text record; never locks the tag.
 @Observable
 final class NFCService {
   var isAvailable: Bool { NFCTagReaderSession.readingAvailable }
@@ -45,12 +53,16 @@ final class NFCService {
   /// Keep a strong reference while a session runs; Core NFC only holds the delegate weakly.
   private var driver: TagSessionDriver?
 
-  func read() async throws -> TagReadResult {
-    try await run(.read, prompt: "Hold the card to the top of your iPhone to check it.")
+  func read(prompt: String = "Hold the card to the top of your iPhone to check it.") async throws -> TagReadResult {
+    try await run(.read, prompt: prompt)
   }
 
   func write(_ url: URL) async throws -> TagReadResult {
-    try await run(.write(url), prompt: "Hold the card to the top of your iPhone to write the review link.")
+    try await write(.url(url), prompt: "Hold the card to the top of your iPhone to write the review link.")
+  }
+
+  func write(_ content: NFCContent, prompt: String) async throws -> TagReadResult {
+    try await run(.write(content), prompt: prompt)
   }
 
   private func run(_ operation: TagOperation, prompt: String) async throws -> TagReadResult {
@@ -69,7 +81,7 @@ final class NFCService {
 
 nonisolated enum TagOperation: Sendable {
   case read
-  case write(URL)
+  case write(NFCContent)
 }
 
 /// Runs on Core NFC's own queue. Finishes exactly once.
@@ -149,13 +161,17 @@ private nonisolated final class TagSessionDriver: NSObject, NFCTagReaderSessionD
         switch operation {
         case .read:
           readBack(uid: uid, writable: status == .readWrite, capacity: capacity, expecting: nil)
-        case .write(let url):
+        case .write(let content):
           guard status == .readWrite else {
             fail(.readOnly)
             return
           }
-          guard let payload = NFCNDEFPayload.wellKnownTypeURIPayload(url: url) else {
-            fail(.system("Couldn't encode the link."))
+          let encoded: NFCNDEFPayload? = switch content {
+          case .url(let url): NFCNDEFPayload.wellKnownTypeURIPayload(url: url)
+          case .text(let text): NFCNDEFPayload.wellKnownTypeTextPayload(string: text, locale: Locale(identifier: "en"))
+          }
+          guard let payload = encoded else {
+            fail(.system("Couldn't encode the content."))
             return
           }
           let message = NFCNDEFMessage(records: [payload])
@@ -170,7 +186,7 @@ private nonisolated final class TagSessionDriver: NSObject, NFCTagReaderSessionD
               fail(.system(error.localizedDescription))
               return
             }
-            readBack(uid: uid, writable: true, capacity: capacity, expecting: url)
+            readBack(uid: uid, writable: true, capacity: capacity, expecting: content)
           }
         }
       }
@@ -179,11 +195,12 @@ private nonisolated final class TagSessionDriver: NSObject, NFCTagReaderSessionD
 
   // MARK: Helpers
 
-  /// Reads the tag and finishes. When `expecting` is set, the stored URL must match it.
-  private func readBack(uid: String, writable: Bool, capacity: Int, expecting: URL?) {
+  /// Reads the tag and finishes. When `expecting` is set, the stored record must match it.
+  private func readBack(uid: String, writable: Bool, capacity: Int, expecting: NFCContent?) {
     guard let tag else { return }
     tag.readNDEF { [self] message, error in
       var url: URL?
+      var text: String?
       if let error {
         // Blank tags report a zero-length message; everything else is a real failure.
         let code = (error as? NFCReaderError)?.code
@@ -192,15 +209,22 @@ private nonisolated final class TagSessionDriver: NSObject, NFCTagReaderSessionD
           return
         }
       } else {
-        url = message?.records.lazy.compactMap { $0.wellKnownTypeURIPayload() }.first
+        let records = message?.records ?? []
+        url = records.lazy.compactMap { $0.wellKnownTypeURIPayload() }.first
+        text = records.lazy.compactMap { $0.wellKnownTypeTextPayload().0 }.first
       }
-      if let expecting, url != expecting {
+      let matches = switch expecting {
+      case nil: true
+      case .url(let expected): url == expected
+      case .text(let expected): text == expected
+      }
+      guard matches else {
         fail(.verifyMismatch)
         return
       }
-      session?.alertMessage = expecting == nil ? "Card read." : "Link written to the card."
+      session?.alertMessage = expecting == nil ? "Card read." : "Written to the card."
       session?.invalidate()
-      finish(.success(TagReadResult(uid: uid, url: url, isWritable: writable, capacity: capacity)))
+      finish(.success(TagReadResult(uid: uid, url: url, text: text, isWritable: writable, capacity: capacity)))
     }
   }
 
