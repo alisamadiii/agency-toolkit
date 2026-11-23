@@ -267,6 +267,9 @@ try {
   const cookieVal = setCookie.match(/flows_embed=([^;]+)/)[1];
   const page = await fetch(ROOT + '/iframe', { redirect: 'manual', headers: { cookie: `flows_embed=${cookieVal}` } });
   check(page.status === 200, 'embed session opens /iframe');
+  const resume = (w) => fetch(`${ROOT}/iframe/resume?w=${w}`, { redirect: 'manual', headers: { cookie: `flows_embed=${cookieVal}` } });
+  check((await resume(hubProject)).headers.get('location') === '/iframe', 'resume reuses the session for its own project');
+  check((await resume(a.data.id)).headers.get('location') === '/iframe/expired', 'resume for another project asks for a new link');
   const [b64, mac] = cookieVal.split('.');
   const forged = JSON.parse(Buffer.from(b64, 'base64url'));
   forged.workspaceId = a.data.id;
