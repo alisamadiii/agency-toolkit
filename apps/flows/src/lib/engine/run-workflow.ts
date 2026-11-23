@@ -7,6 +7,7 @@ import { topoOrder, type GraphEdge, type GraphNode, type Step } from '@/lib/sche
 
 import { sendToChannel, type SendResult } from '@/lib/channels/senders';
 import { channelForSend } from '@/lib/service';
+import { runIntegrationAction } from '@/lib/integrations';
 import { renderText } from '@/lib/template';
 
 import { evaluateIf } from './conditions';
@@ -119,6 +120,9 @@ export async function executeRun(
       if (node.type === 'notify') {
         const config = node.config;
         once = () => sendNotify(row.workspaceId, config, ctx());
+      } else if (node.type === 'app') {
+        const config = node.config;
+        once = () => runApp(row, node.id, config, ctx());
       } else {
         const step: Step =
           node.type === 'http'
@@ -227,6 +231,35 @@ export async function executeRun(
   }
   const failed = halt.signal.aborted;
   return { status: failed ? 'failed' : 'success', output: maskJson(output, mask), error: failed ? firstError : null };
+}
+
+// App node (e.g. Google Calendar): runs with the workspace's own connection. The
+// idempotency key is per run + node, so a retry never books the same thing twice.
+async function runApp(
+  row: RunRow,
+  nodeId: string,
+  config: Extract<GraphNode, { type: 'app' }>['config'],
+  ctx: Record<string, unknown>
+): Promise<StepResult> {
+  const params: Record<string, string> = {};
+  for (const [k, v] of Object.entries(config.params)) params[k] = renderText(v, ctx);
+  try {
+    const output = await Promise.race([
+      runIntegrationAction({
+        workspaceId: row.workspaceId,
+        provider: config.provider,
+        action: config.action,
+        params,
+        idempotencyKey: `${row.id}:${nodeId}`,
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Timed out after ${config.timeoutSec}s`)), config.timeoutSec * 1000)
+      ),
+    ]);
+    return { ok: true, output, logs: `${config.provider}.${config.action}` };
+  } catch (error) {
+    return { ok: false, output: null, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 // Notify node: render the templates and send through the workspace's own channel.

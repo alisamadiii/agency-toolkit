@@ -1,7 +1,7 @@
 'use client';
 
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { Bell, Code2, GitBranch, Globe, Zap } from 'lucide-react';
+import { Bell, CalendarDays, Code2, GitBranch, Globe, Zap } from 'lucide-react';
 import { createContext, useContext } from 'react';
 
 import { cn } from '@/lib/utils';
@@ -9,13 +9,14 @@ import type { NodeType } from '@/lib/schemas';
 
 import { summary, type ChannelOption, type FlowNode } from './graph-utils';
 
-const ICONS: Record<NodeType, typeof Globe> = { trigger: Zap, http: Globe, code: Code2, if: GitBranch, notify: Bell };
+const ICONS: Record<NodeType, typeof Globe> = { trigger: Zap, http: Globe, code: Code2, if: GitBranch, notify: Bell, app: CalendarDays };
 const TINTS: Record<NodeType, string> = {
   trigger: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
   http: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
   code: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
   if: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
   notify: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
+  app: 'bg-info-soft text-info-text',
 };
 
 // Channel names for Notify node summaries.
@@ -97,4 +98,4 @@ function BranchTag({ top, className, children }: { top: string; className: strin
   );
 }
 
-export const nodeTypes = { trigger: TriggerNode, http: StepNode, code: StepNode, if: IfNode, notify: StepNode };
+export const nodeTypes = { trigger: TriggerNode, http: StepNode, code: StepNode, if: IfNode, notify: StepNode, app: StepNode };

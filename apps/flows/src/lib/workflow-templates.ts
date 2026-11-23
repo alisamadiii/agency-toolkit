@@ -65,3 +65,52 @@ export const EXAMPLE: Graph = {
   ],
 };
 
+
+// Someone asks for a call (your app sends name + email) → find the next free slot on
+// your Google Calendar → book it with them as a guest.
+export const BOOK_A_CALL: Graph = {
+  nodes: [
+    { id: 'trigger', type: 'trigger', name: 'Trigger', position: { x: 0, y: 120 }, config: {} },
+    {
+      id: 'find_free_slots_1',
+      type: 'app',
+      name: 'Find free time',
+      position: { x: 300, y: 120 },
+      config: {
+        provider: 'google_calendar',
+        action: 'find_free_slots',
+        params: { durationMinutes: '30', from: 'now', to: '+7 days', dayStart: '09:00', dayEnd: '17:00' },
+        timeoutSec: 30,
+        retries: 1,
+        continueOnError: false,
+      },
+    },
+    {
+      id: 'create_event_1',
+      type: 'app',
+      name: 'Book the call',
+      position: { x: 600, y: 120 },
+      config: {
+        provider: 'google_calendar',
+        action: 'create_event',
+        params: {
+          title: 'Call with {{input.name}}',
+          start: '{{nodes.find_free_slots_1.output.first.start}}',
+          durationMinutes: '30',
+          guestEmail: '{{input.email}}',
+          guestName: '{{input.name}}',
+          description: '{{input.message}}',
+          addMeet: 'true',
+          notifyGuests: 'true',
+        },
+        timeoutSec: 30,
+        retries: 2,
+        continueOnError: false,
+      },
+    },
+  ],
+  edges: [
+    { id: 'e1', source: 'trigger', target: 'find_free_slots_1', sourceHandle: null },
+    { id: 'e2', source: 'find_free_slots_1', target: 'create_event_1', sourceHandle: null },
+  ],
+};

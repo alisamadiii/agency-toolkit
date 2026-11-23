@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { CHANNEL_TYPES } from '@/lib/channels/registry';
+import { findAction, PROVIDER_IDS } from '@/lib/integrations/registry';
 
 // Shared by the API (request validation), the engine and the OpenAPI spec.
 
@@ -87,12 +88,24 @@ export const notifyConfigSchema = z.object({
   continueOnError: z.boolean().default(false),
 });
 
+export const appConfigSchema = z.object({
+  // A connected integration (e.g. google_calendar) and one of its actions.
+  provider: z.enum(PROVIDER_IDS),
+  action: z.string().min(1).max(100),
+  // Templates, rendered at run time.
+  params: z.record(z.string(), z.string().max(10_000)).default({}),
+  timeoutSec: z.number().int().min(1).max(120).default(30),
+  retries: z.number().int().min(0).max(5).default(0),
+  continueOnError: z.boolean().default(false),
+});
+
 export const graphNodeSchema = z.discriminatedUnion('type', [
   z.object({ ...nodeBase, type: z.literal('trigger'), config: z.object({}).default({}) }),
   z.object({ ...nodeBase, type: z.literal('http'), config: httpConfigSchema }),
   z.object({ ...nodeBase, type: z.literal('code'), config: codeConfigSchema }),
   z.object({ ...nodeBase, type: z.literal('if'), config: ifConfigSchema }),
   z.object({ ...nodeBase, type: z.literal('notify'), config: notifyConfigSchema }),
+  z.object({ ...nodeBase, type: z.literal('app'), config: appConfigSchema }),
 ]);
 export type GraphNode = z.output<typeof graphNodeSchema>;
 export type NodeType = GraphNode['type'];
@@ -121,6 +134,11 @@ export function graphProblems(graph: { nodes: { id: string; type: string }[]; ed
   const problems: string[] = [];
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   if (byId.size !== graph.nodes.length) problems.push('Node ids must be unique');
+  for (const n of graph.nodes as { type: string; id: string; config?: { provider?: string; action?: string } }[]) {
+    if (n.type === 'app' && !findAction(n.config?.provider ?? '', n.config?.action ?? '')) {
+      problems.push(`Node ${n.id} uses an unknown app action`);
+    }
+  }
   const triggers = graph.nodes.filter((n) => n.type === 'trigger');
   if (triggers.length !== 1) problems.push('A workflow needs exactly one trigger node');
 

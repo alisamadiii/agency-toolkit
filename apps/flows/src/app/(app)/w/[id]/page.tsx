@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { ChannelsCard } from '@/components/channels-card';
+import { IntegrationsCard } from '@/components/integrations-card';
 import { ApiKeys, Secrets, WorkspaceSettingsForm } from '@/components/dashboard-forms';
 import { CopyText } from '@/components/copy-text';
 import { RunsTable } from '@/components/runs-table';
@@ -13,10 +14,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { db } from '@/db';
 import { workflow } from '@/db/schema';
 import { decrypt } from '@/lib/crypto';
+import { integrationStatus } from '@/lib/integrations';
+import { googleConfigured } from '@/lib/integrations/oauth';
 import * as service from '@/lib/service';
 import { isUuid } from '@/lib/utils';
 
-const TABS = ['workflows', 'runs', 'notifications', 'keys', 'settings'];
+const TABS = ['workflows', 'runs', 'integrations', 'notifications', 'keys', 'settings'];
 
 export default async function WorkspacePage({ params, searchParams }: PageProps<'/w/[id]'>) {
   const { id } = await params;
@@ -25,13 +28,14 @@ export default async function WorkspacePage({ params, searchParams }: PageProps<
   const ws = await service.getWorkspace(id).catch(() => null);
   if (!ws) notFound();
 
-  const [workflows, schedules, keys, secrets, runs, channels] = await Promise.all([
+  const [workflows, schedules, keys, secrets, runs, channels, integrations] = await Promise.all([
     service.listWorkflows(id),
     service.listSchedules(id),
     service.listApiKeys(id),
     service.listSecrets(id),
     service.listRuns(id, { limit: 30 }),
     service.listChannels(id),
+    integrationStatus(id),
   ]);
   const names = new Map(
     (await db.select({ id: workflow.id, name: workflow.name }).from(workflow).where(eq(workflow.workspaceId, id))).map((w) => [
@@ -57,6 +61,7 @@ export default async function WorkspacePage({ params, searchParams }: PageProps<
         <TabsList>
           <TabsTrigger value="workflows">Workflows</TabsTrigger>
           <TabsTrigger value="runs">Runs</TabsTrigger>
+          <TabsTrigger value="integrations">Integrations</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="keys">Keys &amp; secrets</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
@@ -104,6 +109,18 @@ export default async function WorkspacePage({ params, searchParams }: PageProps<
             </CardHeader>
             <CardContent>
               <RunsTable showWorkflow runs={runs.data.map((r) => ({ ...r, workflowName: names.get(r.workflowId) }))} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="integrations">
+          <Card>
+            <CardHeader>
+              <CardTitle>Integrations</CardTitle>
+              <CardDescription>Accounts this workspace has connected, used by app steps on the canvas.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <IntegrationsCard workspaceId={id} integrations={integrations} configured={googleConfigured()} />
             </CardContent>
           </Card>
         </TabsContent>

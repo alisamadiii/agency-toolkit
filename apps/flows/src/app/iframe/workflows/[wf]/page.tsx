@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 
 import { FlowEditor } from '@/components/flow/flow-editor';
 import { CHANNELS } from '@/lib/channels/registry';
+import { integrationStatus } from '@/lib/integrations';
 import { roleAtLeast } from '@/lib/embed';
 import * as service from '@/lib/service';
 import { isUuid } from '@/lib/utils';
@@ -18,11 +19,12 @@ export default async function IframeWorkflow({ params, searchParams }: PageProps
   // Scoped lookup: a workflow from another workspace is not found.
   const wf = await service.getWorkflow(ws.id, wfId).catch(() => null);
   if (!wf) notFound();
-  const [schedules, runs, secrets, channels] = await Promise.all([
+  const [schedules, runs, secrets, channels, integrations] = await Promise.all([
     service.listSchedules(ws.id, wfId),
     service.listRuns(ws.id, { workflowId: wfId, limit: 25 }),
     service.listSecrets(ws.id),
     service.listChannels(ws.id),
+    integrationStatus(ws.id),
   ]);
   const h = await headers();
   const origin = process.env.PUBLIC_URL?.replace(/\/$/, '') || `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host')}`;
@@ -55,6 +57,12 @@ export default async function IframeWorkflow({ params, searchParams }: PageProps
           type: c.type,
           enabled: c.enabled,
           recipient: CHANNELS[c.type].recipient !== null,
+        }))}
+        integrations={integrations.map((i) => ({
+          provider: i.provider,
+          label: i.label,
+          connected: i.connected,
+          accountEmail: i.accountEmail,
         }))}
         runs={runs.data}
         initialRunId={typeof run === 'string' ? run : (runs.data[0]?.id ?? null)}

@@ -16,9 +16,10 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { CHANNELS, type ChannelType } from '@/lib/channels/registry';
+import { findAction, PROVIDERS } from '@/lib/integrations/registry';
 import { IF_OPERATORS, type GraphNode, type NodeType } from '@/lib/schemas';
 
-import { NODE_META, type ChannelOption, type FlowNode } from './graph-utils';
+import { NODE_META, type ChannelOption, type FlowNode, type IntegrationOption } from './graph-utils';
 
 const CodeEditor = dynamic(() => import('@/components/code-editor'), {
   ssr: false,
@@ -38,6 +39,7 @@ type HttpConfig = Extract<GraphNode, { type: 'http' }>['config'];
 type CodeConfig = Extract<GraphNode, { type: 'code' }>['config'];
 type IfConfig = Extract<GraphNode, { type: 'if' }>['config'];
 type NotifyConfig = Extract<GraphNode, { type: 'notify' }>['config'];
+type AppConfig = Extract<GraphNode, { type: 'app' }>['config'];
 
 export type WorkflowSettings = {
   description: string;
@@ -59,9 +61,10 @@ export function NodePanel(props: {
   onChange: (patch: Partial<FlowNode['data']>) => void;
   onDelete: () => void;
   onClose: () => void;
-  upstream: { id: string; type: NodeType; name: string }[];
+  upstream: { id: string; type: NodeType; name: string; provider?: string; action?: string }[];
   secretNames: string[];
   channels: ChannelOption[];
+  integrations?: IntegrationOption[];
   result?: NodeResult;
   // Trigger only
   workspaceId: string;
@@ -121,6 +124,14 @@ export function NodePanel(props: {
               />
             )}
             {type === 'if' && <IfSettings config={node.data.config as IfConfig} onChange={(config) => onChange({ config })} />}
+            {type === 'app' && (
+              <AppSettings
+                config={node.data.config as AppConfig}
+                integrations={props.integrations ?? []}
+                workspaceId={props.workspaceId}
+                onChange={(config) => onChange({ config })}
+              />
+            )}
             {type === 'notify' && (
               <NotifySettings
                 config={node.data.config as NotifyConfig}
@@ -505,6 +516,89 @@ function TriggerSettings(props: Parameters<typeof NodePanel>[0]) {
   );
 }
 
+// ---------- App (connected integration) ----------
+
+function AppSettings({
+  config,
+  integrations,
+  workspaceId,
+  onChange,
+}: {
+  config: AppConfig;
+  integrations: IntegrationOption[];
+  workspaceId: string;
+  onChange: (c: AppConfig) => void;
+}) {
+  const { paths } = useApp();
+  const spec = PROVIDERS[config.provider as keyof typeof PROVIDERS];
+  const action = findAction(config.provider, config.action);
+  const status = integrations.find((i) => i.provider === config.provider);
+  const setParam = (key: string, value: string) => onChange({ ...config, params: { ...config.params, [key]: value } });
+
+  return (
+    <>
+      <div className="rounded-md border bg-muted/30 p-3 text-sm">
+        <p className="font-medium">{spec?.label ?? config.provider}</p>
+        {status?.connected ? (
+          <p className="text-xs text-muted-foreground">Connected as {status.accountEmail}</p>
+        ) : (
+          <p className="text-xs text-amber-700">
+            Not connected.{' '}
+            <a href={paths.workspace(workspaceId, 'integrations')} className="underline">
+              Connect it in Integrations
+            </a>
+          </p>
+        )}
+      </div>
+      <Field label="Action">
+        <select
+          className={selectClass}
+          value={config.action}
+          onChange={(e) => onChange({ ...config, action: e.target.value, params: {} })}
+        >
+          <option value="">Pick an action…</option>
+          {spec?.actions.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {action && <p className="text-xs text-muted-foreground">{action.description}</p>}
+      {action?.fields.map((f) => {
+        const value = config.params[f.key] ?? '';
+        if (f.kind === 'boolean') {
+          return (
+            <label key={f.key} className="flex items-center justify-between gap-3 text-sm">
+              <span>{f.label}</span>
+              <Switch checked={value === 'true'} onCheckedChange={(v) => setParam(f.key, v ? 'true' : 'false')} />
+            </label>
+          );
+        }
+        return (
+          <Field
+            key={f.key}
+            label={f.required ? `${f.label} *` : f.label}
+            hint={f.help}
+          >
+            {f.kind === 'textarea' ? (
+              <Textarea rows={4} value={value} placeholder={f.placeholder} onChange={(e) => setParam(f.key, e.target.value)} />
+            ) : (
+              <Input
+                value={value}
+                placeholder={f.placeholder}
+                className="font-mono text-xs"
+                onChange={(e) => setParam(f.key, e.target.value)}
+              />
+            )}
+          </Field>
+        );
+      })}
+      <CommonStepFields config={config} onChange={onChange} />
+    </>
+  );
+}
+
 // ---------- Notify ----------
 
 function NotifySettings({
@@ -587,7 +681,13 @@ const CHANNEL_LABELS: Record<string, string> = Object.fromEntries(
 
 // ---------- Helpers ----------
 
-function Variables({ upstream, secretNames }: { upstream: { id: string; type: NodeType; name: string }[]; secretNames: string[] }) {
+function Variables({
+  upstream,
+  secretNames,
+}: {
+  upstream: { id: string; type: NodeType; name: string; provider?: string; action?: string }[];
+  secretNames: string[];
+}) {
   const items: { label: string; value: string }[] = [{ label: 'Run input', value: '{{input}}' }];
   for (const n of upstream) {
     if (n.type === 'trigger') continue;
@@ -596,6 +696,10 @@ function Variables({ upstream, secretNames }: { upstream: { id: string; type: No
       items.push({ label: `${n.name} · body`, value: `{{nodes.${n.id}.output.body}}` });
     } else if (n.type === 'if') {
       items.push({ label: `${n.name} · result`, value: `{{nodes.${n.id}.output.result}}` });
+    } else if (n.type === 'app') {
+      for (const h of findAction(n.provider ?? '', n.action ?? '')?.outputHints ?? []) {
+        items.push({ label: `${n.name} · ${h.label}`, value: `{{nodes.${n.id}.output.${h.path}}}` });
+      }
     } else if (n.type === 'notify') {
       items.push({ label: `${n.name} · sent`, value: `{{nodes.${n.id}.output.ok}}` });
     } else {

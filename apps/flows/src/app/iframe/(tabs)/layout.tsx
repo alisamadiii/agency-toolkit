@@ -8,6 +8,7 @@ export default async function TabsLayout({ children }: { children: React.ReactNo
   const items = [
     { href: '/iframe', label: 'Workflows', prefixes: ['/iframe/workflows'] },
     { href: '/iframe/runs', label: 'Runs', prefixes: ['/iframe/runs/'] },
+    { href: '/iframe/integrations', label: 'Integrations' },
     { href: '/iframe/notifications', label: 'Notifications' },
     { href: '/iframe/keys', label: session.role === 'full-access' ? 'Keys & secrets' : 'Secrets' },
     { href: '/iframe/settings', label: 'Settings' },

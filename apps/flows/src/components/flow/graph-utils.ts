@@ -1,5 +1,6 @@
 import type { Edge, Node } from '@xyflow/react';
 
+import { findAction } from '@/lib/integrations/registry';
 import type { Graph, GraphEdge, GraphNode, NodeType } from '@/lib/schemas';
 
 // What the canvas keeps per node. `status` paints the last run on the card.
@@ -16,7 +17,11 @@ export const NODE_META: Record<NodeType, { label: string; description: string }>
   code: { label: 'Code', description: 'JavaScript/TypeScript in a sandbox' },
   if: { label: 'IF', description: 'Branch on a condition' },
   notify: { label: 'Notify', description: 'Slack, email, SMS, WhatsApp…' },
+  app: { label: 'App', description: 'A connected app such as Google Calendar' },
 };
+
+// The workspace's connected apps, for the palette and node panel.
+export type IntegrationOption = { provider: string; label: string; connected: boolean; accountEmail?: string };
 
 // The workspace's channels, for labels on Notify nodes and the panel.
 export type ChannelOption = { id: string; name: string; type: string; enabled: boolean; recipient: boolean };
@@ -34,6 +39,8 @@ export function defaultConfig(type: NodeType): GraphNode['config'] {
       };
     case 'if':
       return { conditions: [{ left: '', op: 'equals', right: '' }], combine: 'and' };
+    case 'app':
+      return { provider: 'google_calendar', action: '', params: {}, timeoutSec: 30, retries: 0, continueOnError: false } as unknown as GraphNode['config'];
     case 'notify':
       return { channelId: '', title: '', message: '', to: '', timeoutSec: 30, retries: 0, continueOnError: false } as unknown as GraphNode['config'];
     default:
@@ -137,6 +144,12 @@ export function upstreamOf(id: string, edges: { source: string; target: string }
 
 // One line under the node name.
 export function summary(type: NodeType, config: GraphNode['config'], channels: ChannelOption[] = []): string {
+  if (type === 'app') {
+    const c = config as { provider: string; action: string; params: Record<string, string> };
+    const action = findAction(c.provider, c.action);
+    const hint = c.params.guestEmail || c.params.title || c.params.eventId || '';
+    return `${action?.label ?? 'Pick an action'}${hint ? ` · ${hint}` : ''}`;
+  }
   if (type === 'notify') {
     const c = config as { channelId: string; to: string };
     const ch = channels.find((x) => x.id === c.channelId);

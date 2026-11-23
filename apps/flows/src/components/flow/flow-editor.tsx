@@ -17,7 +17,7 @@ import {
   type Connection,
   type Edge,
 } from '@xyflow/react';
-import { ArrowLeft, Bell, Braces, Code2, GitBranch, Globe, Loader2, Play, Plug, Save } from 'lucide-react';
+import { ArrowLeft, Bell, Braces, CalendarDays, Code2, GitBranch, Globe, Loader2, Play, Plug, Save } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { findAction, PROVIDERS } from '@/lib/integrations/registry';
 import { graphProblems, type Graph, type NodeType } from '@/lib/schemas';
 import { cn } from '@/lib/utils';
 
@@ -42,6 +43,7 @@ import {
   NODE_META,
   nextNodeId,
   type ChannelOption,
+  type IntegrationOption,
   toFlow,
   upstreamOf,
   type FlowNode,
@@ -85,6 +87,7 @@ type Props = {
   schedules: ScheduleRow[];
   secretNames: string[];
   channels?: ChannelOption[];
+  integrations?: IntegrationOption[];
   runs: RunSummary[];
   initialRunId?: string | null;
   readOnly?: boolean;
@@ -112,6 +115,7 @@ function Editor({
   schedules,
   secretNames,
   channels = [],
+  integrations = [],
   runs,
   initialRunId,
   readOnly: readOnlyProp,
@@ -279,17 +283,22 @@ function Editor({
   );
 
   const addNode = useCallback(
-    (type: Exclude<NodeType, 'trigger'>, position?: { x: number; y: number }) => {
+    (
+      type: Exclude<NodeType, 'trigger'>,
+      position?: { x: number; y: number },
+      // App actions: which provider/action, and a friendlier name and id prefix.
+      preset?: { name: string; idPrefix: string; config: FlowNode['data']['config'] }
+    ) => {
       remember();
       const current = getNodes();
-      const id = nextNodeId(type, current.map((n) => n.id));
+      const id = nextNodeId((preset?.idPrefix ?? type) as NodeType, current.map((n) => n.id));
       const anchor = current.find((n) => n.id === selectedId) ?? current[current.length - 1];
       const pos = position ?? { x: (anchor?.position.x ?? 0) + 300, y: anchor?.position.y ?? 0 };
       const node: FlowNode = {
         id,
         type,
         position: pos,
-        data: { name: NODE_META[type].label, config: defaultConfig(type) },
+        data: { name: preset?.name ?? NODE_META[type].label, config: preset?.config ?? defaultConfig(type) },
       };
       setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), { ...node, selected: true }]);
       // Clicking the palette chains the new node after the selected one.
@@ -306,9 +315,13 @@ function Editor({
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
-      const type = event.dataTransfer.getData(DND_TYPE) as Exclude<NodeType, 'trigger'>;
-      if (!type) return;
-      addNode(type, screenToFlowPosition({ x: event.clientX - 112, y: event.clientY - 28 }));
+      const raw = event.dataTransfer.getData(DND_TYPE);
+      if (!raw) return;
+      const pos = screenToFlowPosition({ x: event.clientX - 112, y: event.clientY - 28 });
+      if (raw.startsWith('app:')) {
+        const [, provider, action] = raw.split(':');
+        addNode('app', pos, appPreset(provider, action));
+      } else addNode(raw as Exclude<NodeType, 'trigger'>, pos);
     },
     [addNode, screenToFlowPosition]
   );
@@ -405,7 +418,8 @@ function Editor({
   const upstream = selected
     ? [...upstreamOf(selected.id, edges)].map((id) => {
         const n = nodes.find((x) => x.id === id)!;
-        return { id, type: n.type as NodeType, name: n.data.name };
+        const cfg = n.data.config as { provider?: string; action?: string };
+        return { id, type: n.type as NodeType, name: n.data.name, provider: cfg.provider, action: cfg.action };
       })
     : [];
 
@@ -481,6 +495,11 @@ function Editor({
                 </span>
               </button>
             ))}
+            <AppsPalette
+              integrations={integrations}
+              integrationsHref={paths.workspace(workspaceId, 'integrations')}
+              onAdd={(provider, action) => addNode('app', undefined, appPreset(provider, action))}
+            />
             <RunList runs={runs} activeId={run?.id} onPick={(id) => loadRun(id, false)} />
           </aside>
         )}
@@ -537,6 +556,7 @@ function Editor({
             upstream={upstream}
             secretNames={secretNames}
             channels={channels}
+            integrations={integrations}
             result={run?.results[selected.id]}
             workspaceId={workspaceId}
             workflowId={workflow.id}
@@ -651,5 +671,67 @@ function JsonDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function appPreset(provider: string, action: string) {
+  const spec = findAction(provider, action);
+  return {
+    name: spec?.label ?? 'App',
+    idPrefix: action,
+    config: { provider, action, params: {}, timeoutSec: 30, retries: 0, continueOnError: false } as unknown as FlowNode['data']['config'],
+  };
+}
+
+// Connected apps (Google Calendar…) and their actions, draggable like the other nodes.
+function AppsPalette({
+  integrations,
+  integrationsHref,
+  onAdd,
+}: {
+  integrations: IntegrationOption[];
+  integrationsHref: string;
+  onAdd: (provider: string, action: string) => void;
+}) {
+  if (integrations.length === 0) return null;
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      <p className="text-xs font-medium text-muted-foreground">Apps</p>
+      {integrations.map((i) => {
+        const spec = PROVIDERS[i.provider as keyof typeof PROVIDERS];
+        if (!spec) return null;
+        return (
+          <div key={i.provider} className={cn('rounded-lg border bg-card p-2', !i.connected && 'opacity-70')}>
+            <p className="flex items-center gap-2 px-1 pb-1.5 text-sm font-medium">
+              <CalendarDays className="size-4 text-info-text" /> {spec.label}
+            </p>
+            {i.connected ? (
+              <div className="flex flex-col gap-1">
+                {spec.actions.map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData(DND_TYPE, `app:${i.provider}:${a.id}`);
+                      e.dataTransfer.effectAllowed = 'move';
+                    }}
+                    onClick={() => onAdd(i.provider, a.id)}
+                    title={a.description}
+                    className="cursor-grab rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-muted active:cursor-grabbing"
+                  >
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <Link href={integrationsHref} className="block px-1 text-xs text-coral-text hover:underline">
+                Connect {spec.label} first →
+              </Link>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }

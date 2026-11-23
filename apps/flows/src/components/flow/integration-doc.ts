@@ -1,3 +1,4 @@
+import { findAction, PROVIDERS } from '@/lib/integrations/registry';
 import { topoOrder, type Graph, type GraphNode } from '@/lib/schemas';
 
 // Turns a workflow graph into human/AI-readable integration docs: what it does,
@@ -96,6 +97,16 @@ function describe(node: GraphNode, graph: Graph, names: Map<string, string>): st
         .map((c) => `${c.left} ${OPS[c.op]}${['isEmpty', 'isNotEmpty', 'isTrue'].includes(c.op) ? '' : ` ${c.right}`}`)
         .join(` ${node.config.combine.toUpperCase()} `);
       return `Checks ${conds}. True → ${after('true')}; false → ${after('false')}.`;
+    }
+    case 'app': {
+      const c = node.config;
+      const action = findAction(c.provider, c.action);
+      const provider = PROVIDERS[c.provider as keyof typeof PROVIDERS]?.label ?? c.provider;
+      const params = Object.entries(c.params)
+        .filter(([, v]) => v)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(', ');
+      return `${provider}: ${action?.label ?? c.action}${params ? ` (${params})` : ''}.`;
     }
     case 'notify': {
       const c = node.config;

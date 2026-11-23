@@ -137,6 +137,49 @@ export const embedTicket = pgTable('embed_ticket', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+// ---------- Integrations (apps a workspace connects, e.g. Google Calendar) ----------
+
+export const INTEGRATION_PROVIDERS = ['google_calendar'] as const;
+export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
+
+// One connected account per provider per workspace. Tokens are AES-GCM encrypted.
+export const integration = pgTable(
+  'integration',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspace.id, { onDelete: 'cascade' }),
+    provider: text('provider').$type<IntegrationProvider>().notNull(),
+    accountEmail: text('account_email').notNull(),
+    accountName: text('account_name'),
+    scopes: text('scopes').array().notNull().default(sql`'{}'::text[]`),
+    accessToken: text('access_token').notNull(),
+    refreshToken: text('refresh_token'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    status: text('status').$type<'connected' | 'needs_reconnect'>().notNull().default('connected'),
+    settings: jsonb('settings').$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('integration_workspace_provider_idx').on(t.workspaceId, t.provider)]
+);
+
+// OAuth "state" for a connect popup: single use, 10 minutes, carries the workspace.
+export const oauthState = pgTable('oauth_state', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  hash: text('hash').notNull().unique(),
+  workspaceId: uuid('workspace_id')
+    .notNull()
+    .references(() => workspace.id, { onDelete: 'cascade' }),
+  provider: text('provider').$type<IntegrationProvider>().notNull(),
+  // PKCE verifier, encrypted.
+  codeVerifier: text('code_verifier').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 // ---------- Notifications ----------
 
 // A workspace's own notification destination (its Slack, its Twilio account…).

@@ -15,7 +15,15 @@ import {
   workflowCreateSchema,
 } from '@/lib/schemas';
 import * as service from '@/lib/service';
-import { BLANK, EXAMPLE } from '@/lib/workflow-templates';
+import { calendarsFor, integrationStatus } from '@/lib/integrations';
+import {
+  disconnect as disconnectIntegration,
+  googleConfigured,
+  startConnect,
+  updateSettings as updateIntegrationSettings,
+} from '@/lib/integrations/oauth';
+import { PROVIDER_IDS, type ProviderId } from '@/lib/integrations/registry';
+import { BLANK, BOOK_A_CALL, EXAMPLE } from '@/lib/workflow-templates';
 
 import type { ActionResult } from '../actions';
 
@@ -73,11 +81,11 @@ export async function deleteSecretAction(workspaceId: string, name: string) {
 
 // ---------- Workflows ----------
 
-export async function createWorkflowAction(workspaceId: string, name: string, template: 'blank' | 'example') {
+export async function createWorkflowAction(workspaceId: string, name: string, template: 'blank' | 'example' | 'book_call') {
   return act('content-editor', workspaceId, async (ws) => {
     const wf = await service.createWorkflow(
       ws,
-      workflowCreateSchema.parse({ name: name || 'Untitled workflow', graph: template === 'example' ? EXAMPLE : BLANK })
+      workflowCreateSchema.parse({ name: name || 'Untitled workflow', graph: template === 'example' ? EXAMPLE : template === 'book_call' ? BOOK_A_CALL : BLANK })
     );
     return { id: wf.id };
   });
@@ -205,4 +213,30 @@ export async function testChannelAction(workspaceId: string, id: string, to?: st
     if (!result.ok) throw new Error(result.error ?? 'Send failed');
     return { to: result.to ?? null };
   });
+}
+
+// ---------- Integrations ----------
+
+export async function startIntegrationConnectAction(workspaceId: string, provider: string) {
+  return act('content-editor', workspaceId, async (ws) => {
+    if (!PROVIDER_IDS.includes(provider as ProviderId)) throw new Error('Unknown integration');
+    if (!googleConfigured()) throw new Error('Google sign-in is not set up on this server yet.');
+    return { url: await startConnect(ws, provider as ProviderId) };
+  });
+}
+
+export async function integrationStatusAction(workspaceId: string) {
+  return act('view-only', workspaceId, (ws) => integrationStatus(ws));
+}
+
+export async function disconnectIntegrationAction(workspaceId: string, provider: string) {
+  return act('content-editor', workspaceId, (ws) => disconnectIntegration(ws, provider as ProviderId));
+}
+
+export async function integrationCalendarsAction(workspaceId: string) {
+  return act('content-editor', workspaceId, (ws) => calendarsFor(ws));
+}
+
+export async function setIntegrationSettingsAction(workspaceId: string, provider: string, settings: { calendarId?: string; timezone?: string }) {
+  return act('content-editor', workspaceId, (ws) => updateIntegrationSettings(ws, provider as ProviderId, settings));
 }

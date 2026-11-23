@@ -6,7 +6,7 @@ import type { EmbedRole } from '@/db/schema';
 import * as embedActions from './actions';
 
 const paths: FlowPaths = {
-  workspace: (_id, tab) => (tab && tab !== 'workflows' ? `/iframe/${tab === 'notifications' ? 'notifications' : tab}` : '/iframe'),
+  workspace: (_id, tab) => (tab && tab !== 'workflows' ? `/iframe/${tab}` : '/iframe'),
   workflow: (_id, wf) => `/iframe/workflows/${wf}`,
   newWorkflow: () => '/iframe/workflows/new',
   run: (runId) => `/iframe/runs/${runId}`,

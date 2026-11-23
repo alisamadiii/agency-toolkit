@@ -10,16 +10,28 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-export function NewWorkflowForm({ workspaceId, hasHttpbin }: { workspaceId: string; hasHttpbin: boolean }) {
+export function NewWorkflowForm({
+  workspaceId,
+  hasHttpbin,
+  hasCalendar = false,
+}: {
+  workspaceId: string;
+  hasHttpbin: boolean;
+  hasCalendar?: boolean;
+}) {
   const router = useRouter();
   const { actions, paths } = useApp();
   const { createWorkflowAction } = actions;
   const [name, setName] = useState('');
   const [pending, start] = useTransition();
 
-  const create = (template: 'blank' | 'example') =>
+  const create = (template: 'blank' | 'example' | 'book_call') =>
     start(async () => {
-      const res = await createWorkflowAction(workspaceId, name || (template === 'example' ? 'Example workflow' : ''), template);
+      const res = await createWorkflowAction(
+        workspaceId,
+        name || (template === 'example' ? 'Example workflow' : template === 'book_call' ? 'Book a call' : ''),
+        template
+      );
       if (!res.ok) return void toast.error(res.error);
       router.push(paths.workflow(workspaceId, res.data!.id));
     });
@@ -38,6 +50,11 @@ export function NewWorkflowForm({ workspaceId, hasHttpbin }: { workspaceId: stri
           <Button variant="outline" disabled={pending} onClick={() => create('example')}>
             Start from example
           </Button>
+          {hasCalendar && (
+            <Button variant="outline" disabled={pending} onClick={() => create('book_call')}>
+              Book a call (Google Calendar)
+            </Button>
+          )}
         </div>
         <p className="text-xs text-muted-foreground">
           The example fetches httpbin.org, branches with IF on the status code, and shapes the result with Code.

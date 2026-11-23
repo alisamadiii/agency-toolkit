@@ -123,6 +123,7 @@ curl -s $URL/runs/<runId> -H "authorization: Bearer $KEY"     # step outputs and
 | `GET /secrets`, `PUT/DELETE /secrets/:NAME` | Values are write-only |
 | `GET /channel-types`, `GET/POST /channels`, `GET/PATCH/DELETE /channels/:id`, `POST /channels/:id/test` | This workspace's notification channels |
 | `GET /signing-secret` | Secret that signs this workspace's callbacks |
+| `GET /integrations`, `POST /integrations/:provider/connect`, `DELETE /integrations/:provider` | Connected apps (Google Calendar) |
 | `POST /validate` | Check steps and preview the next 5 cron times |
 | `POST /api/hooks/:workflowId/:token` | Public trigger (no key); the JSON body becomes `input` |
 
@@ -162,6 +163,44 @@ A workflow is `{ nodes, edges }` (the dashboard canvas edits the same JSON):
 - A failed node stops the run unless it has `continueOnError` (then the next nodes run and see
   `{ error }`). Whole-run retries: `maxAttempts`; whole-run limit: `timeoutSec`.
 - Run output is the output of the end node that ran (or `{ nodeId: output }` when several did).
+
+### Integrations (per workspace): Google Calendar
+
+Each workspace connects its **own** accounts in the **Integrations** tab (dashboard and
+`/iframe`). Connected apps appear under **Apps** in the canvas sidebar.
+
+Google Calendar actions (node type `app`, `provider: "google_calendar"`):
+
+| Action | Params (templates) | Output |
+|---|---|---|
+| `find_free_slots` | `durationMinutes`, `from` ("now"), `to` ("+7 days"), `dayStart`/`dayEnd` ("09:00"/"17:00"), `days`, `timezone`, `limit` | `{ slots, first: { start, end }, timezone }` |
+| `create_event` | `title`*, `start`*, `durationMinutes`, `guestEmail`, `guestName`, `description`, `location`, `addMeet`, `notifyGuests`, `timezone` | `{ eventId, link, meetLink, start, end, guest }` |
+| `list_events` | `from`, `to` (≤ 62 days) | `{ events, count }` |
+| `cancel_event` | `eventId`*, `notifyGuests` | `{ cancelled }` |
+
+- Connect opens Google's sign-in in a popup (Google doesn't allow it inside iframes). The
+  popup carries a hashed, single-use, 10-minute state tied to the workspace; PKCE; offline access.
+- Tokens are AES-GCM encrypted with `MASTER_KEY`, refreshed automatically, never returned by
+  the API or shown in run output. A failed refresh marks the integration "Reconnect needed".
+- A node can only use its own workspace's connection. `create_event` uses an event id derived
+  from the run and node, so a retry never books twice.
+- Disconnect revokes access at Google.
+- "New workflow → Book a call" builds: trigger (`name`, `email`) → find free time → book it.
+
+API: `GET /integrations`, `POST /integrations/google_calendar/connect` (→ `{ url }` to open in a
+browser), `DELETE /integrations/google_calendar`.
+
+Setup (once): in Google Cloud (the project with the verified consent screen) create an OAuth
+client ID of type **Web application** and add the redirect URIs
+`https://flows.alisamadii.com/api/integrations/google/callback` and
+`http://localhost:3300/api/integrations/google/callback`. Set `GOOGLE_CLIENT_ID`,
+`GOOGLE_CLIENT_SECRET` and `PUBLIC_URL`.
+
+Testing without Google: `node scripts/fake-google.mjs`, start Flows with `GOOGLE_CLIENT_ID=x
+GOOGLE_CLIENT_SECRET=x GOOGLE_OAUTH_BASE=http://localhost:3399 GOOGLE_AUTH_URL=http://localhost:3399/auth
+GOOGLE_USERINFO_URL=http://localhost:3399/userinfo GOOGLE_API_BASE=http://localhost:3399
+PUBLIC_URL=http://localhost:3300 pnpm dev`, then
+`FLOWS_ADMIN_KEY=… node --env-file=.env.local scripts/smoke-integrations.mjs`.
 
 ### Notifications (per workspace)
 
@@ -262,3 +301,4 @@ In the hub (`saas/Portfolio`): `packages/trpc/src/lib/flows.ts` + `routers/autom
 | `DENO_BIN` | `deno` | Deno binary (set in the image) |
 | `EMBED_ALLOWED_ORIGINS` | `https://app.alisamadii.com` | Who may frame `/iframe` (comma separated) |
 | `EMBED_DEFAULT_ALLOWED_HOSTS` | `*` | Allowed hosts for workspaces the hub creates |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | — | Google sign-in for the Calendar integration |
