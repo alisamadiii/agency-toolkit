@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1795445828288,
+      "tag": "0000_misty_pet_avengers",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1795447000237,
+      "tag": "0001_graph_add",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795447000721,
+      "tag": "0002_graph_drop_steps",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795448748928,
+      "tag": "0003_notifications",
+      "breakpoints": true
+    }
+  ]
+}
