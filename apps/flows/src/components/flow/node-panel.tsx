@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { Plus, Trash2, X } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { useApp } from '@/components/app-context';
@@ -20,6 +20,8 @@ import { findAction, PROVIDERS } from '@/lib/integrations/registry';
 import { IF_OPERATORS, type GraphNode, type NodeType } from '@/lib/schemas';
 
 import { NODE_META, type ChannelOption, type FlowNode, type IntegrationOption } from './graph-utils';
+import { insertVariable, TemplateInput, type TemplateField, TemplateTextarea, useVariables, variableFor, VariablesContext } from './template-input';
+import { examplePath, TRIGGER_SOURCE, type Variable } from './variables';
 
 const CodeEditor = dynamic(() => import('@/components/code-editor'), {
   ssr: false,
@@ -40,6 +42,7 @@ type CodeConfig = Extract<GraphNode, { type: 'code' }>['config'];
 type IfConfig = Extract<GraphNode, { type: 'if' }>['config'];
 type NotifyConfig = Extract<GraphNode, { type: 'notify' }>['config'];
 type AppConfig = Extract<GraphNode, { type: 'app' }>['config'];
+type TriggerConfig = Extract<GraphNode, { type: 'trigger' }>['config'];
 
 export type WorkflowSettings = {
   description: string;
@@ -61,8 +64,14 @@ export function NodePanel(props: {
   onChange: (patch: Partial<FlowNode['data']>) => void;
   onDelete: () => void;
   onClose: () => void;
-  upstream: { id: string; type: NodeType; name: string; provider?: string; action?: string }[];
-  secretNames: string[];
+  // What {{…}} can reference here (trigger fields, earlier outputs, secrets).
+  variables: Variable[];
+  // Saves the trigger's sample input from any node's {{ menu.
+  onSaveSample?: (sample: Record<string, unknown>) => void;
+  // JSON shown when the trigger has no saved sample yet (fields the graph already reads).
+  inferredSample: Record<string, unknown>;
+  // Every node on the canvas (id → name), to explain references to missing steps.
+  nodeNames: Record<string, string>;
   channels: ChannelOption[];
   integrations?: IntegrationOption[];
   result?: NodeResult;
@@ -78,6 +87,9 @@ export function NodePanel(props: {
   const { node, onChange, readOnly } = props;
   const type = node.type as NodeType;
   const [tab, setTab] = useState(props.result ? 'output' : 'settings');
+  const lastField = useRef<TemplateField | null>(null);
+  const scope = useMemo(() => ({ selfId: node.id, nodeNames: props.nodeNames }), [node.id, props.nodeNames]);
+  const inferred = Object.keys(props.inferredSample).length ? JSON.stringify(props.inferredSample, null, 2) : undefined;
 
   return (
     <aside className="flex h-full w-[440px] shrink-0 flex-col border-l bg-background">
@@ -102,6 +114,9 @@ export function NodePanel(props: {
         </Button>
       </div>
 
+      <VariablesContext.Provider
+        value={{ variables: props.variables, onSaveSample: readOnly ? undefined : props.onSaveSample, sampleDraft: inferred, onFieldFocus: (el) => (lastField.current = el), scope }}
+      >
       <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
         <TabsList className="mx-4 mt-3">
           <TabsTrigger value="settings">{type === 'trigger' ? 'Trigger' : 'Settings'}</TabsTrigger>
@@ -140,7 +155,7 @@ export function NodePanel(props: {
                 onChange={(config) => onChange({ config })}
               />
             )}
-            {type !== 'trigger' && <Variables upstream={props.upstream} secretNames={props.secretNames} />}
+            {type !== 'trigger' && <Variables insertInto={() => lastField.current} />}
           </fieldset>
         </TabsContent>
 
@@ -148,6 +163,7 @@ export function NodePanel(props: {
           <ResultView result={props.result} />
         </TabsContent>
       </Tabs>
+      </VariablesContext.Provider>
     </aside>
   );
 }
@@ -210,6 +226,7 @@ function CommonStepFields<T extends { timeoutSec: number; retries: number; conti
 // ---------- HTTP ----------
 
 function HttpSettings({ config, onChange }: { config: HttpConfig; onChange: (c: HttpConfig) => void }) {
+  const example = examplePath(useVariables().variables, 'input.id');
   const headers = Object.entries(config.headers ?? {});
   const [bodyText, setBodyText] = useState(() =>
     config.body === undefined ? '' : typeof config.body === 'string' ? config.body : JSON.stringify(config.body, null, 2)
@@ -241,11 +258,11 @@ function HttpSettings({ config, onChange }: { config: HttpConfig; onChange: (c: 
           </select>
         </Field>
         <Field label="URL">
-          <Input
+          <TemplateInput
             value={config.url}
             onChange={(e) => onChange({ ...config, url: e.target.value })}
             className="font-mono text-xs"
-            placeholder="https://api.example.com/items/{{input.id}}"
+            placeholder={`https://api.example.com/items/{{${example}}}`}
           />
         </Field>
       </div>
@@ -260,7 +277,7 @@ function HttpSettings({ config, onChange }: { config: HttpConfig; onChange: (c: 
                 className="font-mono text-xs"
                 onChange={(e) => setHeaders(headers.map((h, j) => (j === i ? [e.target.value, h[1]] : h)))}
               />
-              <Input
+              <TemplateInput
                 value={v}
                 placeholder="value or {{secrets.TOKEN}}"
                 className="font-mono text-xs"
@@ -284,12 +301,12 @@ function HttpSettings({ config, onChange }: { config: HttpConfig; onChange: (c: 
 
       {config.method !== 'GET' && config.method !== 'HEAD' && (
         <Field label="Body" hint="JSON is sent as application/json. Templates work inside strings.">
-          <Textarea
+          <TemplateTextarea
             rows={6}
             value={bodyText}
             onChange={(e) => setBody(e.target.value)}
             className="font-mono text-xs"
-            placeholder={'{\n  "name": "{{input.name}}"\n}'}
+            placeholder={`{\n  "name": "{{${example}}}"\n}`}
           />
         </Field>
       )}
@@ -310,6 +327,11 @@ function CodeSettings({
   readOnly?: boolean;
   onChange: (c: CodeConfig) => void;
 }) {
+  const { variables } = useVariables();
+  const completions = useMemo(
+    () => variables.map((v) => ({ path: v.path, label: `${v.group} · ${v.label}`, detail: v.preview || v.type })),
+    [variables]
+  );
   return (
     <>
       <Field
@@ -317,11 +339,16 @@ function CodeSettings({
         hint={
           <>
             Default export gets <code>{'{ input, nodes, secrets, run }'}</code> and returns JSON. <code>console.log</code> goes to
-            the logs. <code>fetch</code> works for allowed hosts.
+            the logs. <code>fetch</code> works for allowed hosts. Type <code>input.</code> or <code>nodes.</code> for suggestions.
           </>
         }
       >
-        <CodeEditor value={config.code} onChange={(code) => !readOnly && onChange({ ...config, code })} height="340px" />
+        <CodeEditor
+          value={config.code}
+          onChange={(code) => !readOnly && onChange({ ...config, code })}
+          height="340px"
+          completions={completions}
+        />
       </Field>
       <CommonStepFields config={config} onChange={onChange} />
     </>
@@ -343,6 +370,8 @@ const OP_LABELS: Record<(typeof IF_OPERATORS)[number], string> = {
 const UNARY = new Set(['isEmpty', 'isNotEmpty', 'isTrue']);
 
 function IfSettings({ config, onChange }: { config: IfConfig; onChange: (c: IfConfig) => void }) {
+  const { variables } = useVariables();
+  const example = examplePath(variables, 'input.status');
   const set = (i: number, patch: Partial<IfConfig['conditions'][number]>) =>
     onChange({ ...config, conditions: config.conditions.map((c, j) => (j === i ? { ...c, ...patch } : c)) });
 
@@ -364,12 +393,13 @@ function IfSettings({ config, onChange }: { config: IfConfig; onChange: (c: IfCo
               <option value="or">or</option>
             </select>
           )}
-          <Input
+          <TemplateInput
             value={c.left}
-            placeholder="{{nodes.fetch.output.status}}"
+            placeholder={`{{${example}}}  (type {{ for options)`}
             className="font-mono text-xs"
             onChange={(e) => set(i, { left: e.target.value })}
           />
+          <PickedValue text={c.left} />
           <div className="flex gap-2">
             <select className={selectClass + ' flex-1'} value={c.op} onChange={(e) => set(i, { op: e.target.value as typeof c.op })}>
               {IF_OPERATORS.map((op) => (
@@ -389,7 +419,12 @@ function IfSettings({ config, onChange }: { config: IfConfig; onChange: (c: IfCo
             )}
           </div>
           {!UNARY.has(c.op) && (
-            <Input value={c.right} placeholder="200" className="font-mono text-xs" onChange={(e) => set(i, { right: e.target.value })} />
+            <TemplateInput
+              value={c.right}
+              placeholder="A value, or {{ for a variable"
+              className="font-mono text-xs"
+              onChange={(e) => set(i, { right: e.target.value })}
+            />
           )}
         </div>
       ))}
@@ -409,20 +444,47 @@ function IfSettings({ config, onChange }: { config: IfConfig; onChange: (c: IfCo
 
 function TriggerSettings(props: Parameters<typeof NodePanel>[0]) {
   const { paths, canManageKeys } = useApp();
-  const [input, setInput] = useState('{\n  \n}');
+  const config = (props.node.data.config ?? {}) as TriggerConfig;
+  const [input, setInput] = useState(() => {
+    const saved = config.sampleInput ?? props.inferredSample;
+    return Object.keys(saved).length ? JSON.stringify(saved, null, 2) : '{\n  \n}';
+  });
+  const [inputError, setInputError] = useState<string | null>(null);
   const s = props.settings!;
   const set = (patch: Partial<WorkflowSettings>) => props.onSettingsChange?.({ ...s, ...patch });
+  const fields = props.variables.filter((v) => v.source === TRIGGER_SOURCE && v.featured && v.path !== 'input');
+
+  const changeInput = (text: string) => {
+    setInput(text);
+    if (!text.trim()) {
+      setInputError(null);
+      return props.onChange({ config: { ...config, sampleInput: undefined } });
+    }
+    try {
+      const value = JSON.parse(text);
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Use a JSON object, e.g. { "name": "Ali" }');
+      setInputError(null);
+      props.onChange({ config: { ...config, sampleInput: Object.keys(value).length ? value : undefined } });
+    } catch (e) {
+      setInputError(e instanceof Error ? e.message : 'Invalid JSON');
+    }
+  };
 
   return (
     <>
       <div className="grid gap-2 rounded-md border p-3">
-        <Label>Run now</Label>
-        <Textarea rows={4} value={input} onChange={(e) => setInput(e.target.value)} className="font-mono text-xs" />
-        <p className="text-xs text-muted-foreground">
-          Becomes <code>input</code> for every node ({'{{input.x}}'}). Saves first if there are changes.
-        </p>
-        <Button size="sm" onClick={() => props.onRun?.(input)} disabled={props.readOnly}>
-          Run workflow
+        <Label>Sample input</Label>
+        <Textarea rows={6} value={input} onChange={(e) => changeInput(e.target.value)} className="font-mono text-xs" />
+        {inputError ? (
+          <p className="text-xs text-red-600">{inputError}</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            The JSON your app sends. Its fields show up when you type {'{{'} in any step
+            {fields.length > 0 && <>: {fields.map((f) => f.path).join(', ')}</>}. Saved with the workflow.
+          </p>
+        )}
+        <Button size="sm" onClick={() => props.onRun?.(input)} disabled={props.readOnly || !!inputError}>
+          Run with this input
         </Button>
       </div>
 
@@ -582,9 +644,9 @@ function AppSettings({
             hint={f.help}
           >
             {f.kind === 'textarea' ? (
-              <Textarea rows={4} value={value} placeholder={f.placeholder} onChange={(e) => setParam(f.key, e.target.value)} />
+              <TemplateTextarea rows={4} value={value} placeholder={f.placeholder} onChange={(e) => setParam(f.key, e.target.value)} />
             ) : (
-              <Input
+              <TemplateInput
                 value={value}
                 placeholder={f.placeholder}
                 className="font-mono text-xs"
@@ -613,6 +675,7 @@ function NotifySettings({
   onChange: (c: NotifyConfig) => void;
 }) {
   const { paths } = useApp();
+  const example = examplePath(useVariables().variables);
   const channel = channels.find((c) => c.id === config.channelId);
   const spec = channel ? CHANNELS[channel.type as ChannelType] : null;
 
@@ -647,7 +710,7 @@ function NotifySettings({
       </Field>
       {spec?.recipient && (
         <Field label={spec.recipient.label} hint={spec.recipient.help}>
-          <Input
+          <TemplateInput
             value={config.to}
             placeholder={spec.recipient.placeholder}
             className="font-mono text-xs"
@@ -656,17 +719,17 @@ function NotifySettings({
         </Field>
       )}
       <Field label="Title" hint="Subject for email; bold first line elsewhere.">
-        <Input
+        <TemplateInput
           value={config.title}
-          placeholder="New booking from {{input.customer.name}}"
+          placeholder={`New request from {{${example}}}`}
           onChange={(e) => onChange({ ...config, title: e.target.value })}
         />
       </Field>
       <Field label="Message">
-        <Textarea
+        <TemplateTextarea
           rows={6}
           value={config.message}
-          placeholder={'{{input.customer.name}} booked {{input.service}} at {{input.startsAt}}.'}
+          placeholder={`{{${example}}} just sent a request. Type {{ to insert a value.`}
           onChange={(e) => onChange({ ...config, message: e.target.value })}
         />
       </Field>
@@ -681,50 +744,45 @@ const CHANNEL_LABELS: Record<string, string> = Object.fromEntries(
 
 // ---------- Helpers ----------
 
-function Variables({
-  upstream,
-  secretNames,
-}: {
-  upstream: { id: string; type: NodeType; name: string; provider?: string; action?: string }[];
-  secretNames: string[];
-}) {
-  const items: { label: string; value: string }[] = [{ label: 'Run input', value: '{{input}}' }];
-  for (const n of upstream) {
-    if (n.type === 'trigger') continue;
-    if (n.type === 'http') {
-      items.push({ label: `${n.name} · status`, value: `{{nodes.${n.id}.output.status}}` });
-      items.push({ label: `${n.name} · body`, value: `{{nodes.${n.id}.output.body}}` });
-    } else if (n.type === 'if') {
-      items.push({ label: `${n.name} · result`, value: `{{nodes.${n.id}.output.result}}` });
-    } else if (n.type === 'app') {
-      for (const h of findAction(n.provider ?? '', n.action ?? '')?.outputHints ?? []) {
-        items.push({ label: `${n.name} · ${h.label}`, value: `{{nodes.${n.id}.output.${h.path}}}` });
-      }
-    } else if (n.type === 'notify') {
-      items.push({ label: `${n.name} · sent`, value: `{{nodes.${n.id}.output.ok}}` });
-    } else {
-      items.push({ label: `${n.name} · output`, value: `{{nodes.${n.id}.output}}` });
-    }
-  }
-  for (const s of secretNames) items.push({ label: `Secret ${s}`, value: `{{secrets.${s}}}` });
+// Under an IF value: what the picked variable is, e.g. "string · \"Ali\"".
+function PickedValue({ text }: { text: string }) {
+  const v = variableFor(useVariables().variables, text);
+  if (!v || (!v.type && !v.preview)) return null;
+  return (
+    <p className="-mt-1 truncate text-[11px] text-muted-foreground">
+      {v.group} · {v.label}
+      {v.type && <> · {v.type}</>}
+      {v.preview && v.preview !== v.type && <span className="font-mono"> · {v.preview}</span>}
+    </p>
+  );
+}
+
+function Variables({ insertInto }: { insertInto: () => TemplateField | null }) {
+  const { variables } = useVariables();
+  const items = variables.filter((v) => v.featured);
 
   return (
     <div className="grid gap-2">
       <Label>Variables</Label>
-      <p className="text-xs text-muted-foreground">Click to copy. Add .field to go deeper, e.g. .body.items[0].id</p>
+      <p className="text-xs text-muted-foreground">
+        Click to insert into the last field you used, or type {'{{'} in a field to see everything.
+      </p>
       <div className="flex flex-wrap gap-1.5">
         {items.map((item) => (
           <button
-            key={item.value}
+            key={item.path}
             type="button"
-            title={item.value}
+            title={`{{${item.path}}}`}
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
-              navigator.clipboard.writeText(item.value);
-              toast.success(`Copied ${item.value}`);
+              const el = insertInto();
+              if (el && el.isConnected && !el.disabled) return insertVariable(el, item.path);
+              navigator.clipboard.writeText(`{{${item.path}}}`);
+              toast.success(`Copied {{${item.path}}}`);
             }}
             className="rounded-md border bg-muted/40 px-2 py-1 text-left font-mono text-[11px] hover:bg-muted"
           >
-            {item.label}
+            {item.source === TRIGGER_SOURCE ? `input · ${item.label}` : `${item.group} · ${item.label}`}
           </button>
         ))}
       </div>

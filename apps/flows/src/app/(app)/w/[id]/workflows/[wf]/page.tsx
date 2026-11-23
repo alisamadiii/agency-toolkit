@@ -6,6 +6,7 @@ import { CHANNELS } from '@/lib/channels/registry';
 import { integrationStatus } from '@/lib/integrations';
 import * as service from '@/lib/service';
 import { isUuid } from '@/lib/utils';
+import { appUrl } from '@/lib/base-url';
 
 export default async function WorkflowPage({ params, searchParams }: PageProps<'/w/[id]/workflows/[wf]'>) {
   const { id, wf: wfId } = await params;
@@ -23,7 +24,7 @@ export default async function WorkflowPage({ params, searchParams }: PageProps<'
   ]);
 
   const h = await headers();
-  const origin = process.env.PUBLIC_URL?.replace(/\/$/, '') || `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host')}`;
+  const origin = appUrl() || `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host')}`;
 
   return (
     // Full screen over the app header: the editor toolbar has its own back link.

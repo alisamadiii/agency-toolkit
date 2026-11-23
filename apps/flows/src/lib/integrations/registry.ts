@@ -1,6 +1,7 @@
-// Apps a workspace can connect (client-safe). The canvas palette, the node panel and
-// GET /integrations are built from this; server code lives next to it per provider.
-// Adding an app = one entry here + one provider module (no hub changes).
+// Apps workflows can use (client-safe). The canvas palette, the node panel and
+// GET /integrations are built from this. The connection itself lives in the client
+// hub, which runs the actions (see ./hub.ts); adding an app = one entry here plus its
+// routes in the hub's flowsService router.
 
 export const PROVIDER_IDS = ['google_calendar'] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
@@ -48,6 +49,7 @@ export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
           { key: 'days', label: 'Days', kind: 'text', placeholder: 'mon,tue,wed,thu,fri' },
           { key: 'timezone', label: 'Time zone', kind: 'text', placeholder: 'America/New_York', help: 'Default: the calendar setting.' },
           { key: 'limit', label: 'Max slots', kind: 'number', placeholder: '10' },
+          { key: 'calendarId', label: 'Calendar', kind: 'text', placeholder: 'primary', help: 'Calendar id from the client hub. Default: your main calendar.' },
         ],
         outputHints: [
           { path: 'first.start', label: 'first free start' },
@@ -70,6 +72,7 @@ export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
           { key: 'addMeet', label: 'Add Google Meet link', kind: 'boolean' },
           { key: 'notifyGuests', label: 'Email the guest an invite', kind: 'boolean' },
           { key: 'timezone', label: 'Time zone', kind: 'text', placeholder: 'America/New_York' },
+          { key: 'calendarId', label: 'Calendar', kind: 'text', placeholder: 'primary', help: 'Calendar id from the client hub. Default: your main calendar.' },
         ],
         outputHints: [
           { path: 'link', label: 'event link' },
@@ -85,6 +88,7 @@ export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
         fields: [
           { key: 'from', label: 'From', kind: 'text', placeholder: 'now' },
           { key: 'to', label: 'To', kind: 'text', placeholder: '+7 days', help: 'Up to 62 days.' },
+          { key: 'calendarId', label: 'Calendar', kind: 'text', placeholder: 'primary', help: 'Calendar id from the client hub. Default: your main calendar.' },
         ],
         outputHints: [
           { path: 'events', label: 'events' },
@@ -98,6 +102,7 @@ export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
         fields: [
           { key: 'eventId', label: 'Event id', kind: 'text', required: true, placeholder: '{{input.eventId}}' },
           { key: 'notifyGuests', label: 'Email the guests', kind: 'boolean' },
+          { key: 'calendarId', label: 'Calendar', kind: 'text', placeholder: 'primary', help: 'Calendar id from the client hub. Default: your main calendar.' },
         ],
         outputHints: [{ path: 'cancelled', label: 'cancelled' }],
       },

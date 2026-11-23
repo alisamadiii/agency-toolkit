@@ -29,11 +29,6 @@ export type FlowActions = Pick<
   | 'updateChannelAction'
   | 'deleteChannelAction'
   | 'testChannelAction'
-  | 'startIntegrationConnectAction'
-  | 'integrationStatusAction'
-  | 'disconnectIntegrationAction'
-  | 'integrationCalendarsAction'
-  | 'setIntegrationSettingsAction'
 >;
 
 export type FlowPaths = {

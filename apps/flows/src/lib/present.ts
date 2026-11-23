@@ -1,10 +1,11 @@
 import type { NextRequest } from 'next/server';
 
 import type { workflow } from '@/db/schema';
+import { appUrl } from '@/lib/base-url';
 
 // Public base URL for links handed to API clients.
 export function baseUrl(req: NextRequest) {
-  const configured = process.env.PUBLIC_URL?.replace(/\/$/, '');
+  const configured = appUrl();
   return configured || req.nextUrl.origin;
 }
 

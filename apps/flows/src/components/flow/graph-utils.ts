@@ -142,6 +142,26 @@ export function upstreamOf(id: string, edges: { source: string; target: string }
   return result;
 }
 
+const IF_OP_TEXT: Record<string, string> = {
+  equals: '=',
+  notEquals: '≠',
+  contains: 'contains',
+  gt: '>',
+  lt: '<',
+  isEmpty: 'is empty',
+  isNotEmpty: 'is not empty',
+  isTrue: 'is true',
+};
+
+// {{nodes.fetch.output.status}} → fetch.status, {{input.email}} → input.email
+function shortRef(text: string) {
+  return text
+    .trim()
+    .replace(/\{\{\s*([^}]+?)\s*\}\}/g, '$1')
+    .replace(/\bnodes\.([\w-]+)\.output\.?/g, '$1.')
+    .replace(/\.$/, '');
+}
+
 // One line under the node name.
 export function summary(type: NodeType, config: GraphNode['config'], channels: ChannelOption[] = []): string {
   if (type === 'app') {
@@ -167,8 +187,11 @@ export function summary(type: NodeType, config: GraphNode['config'], channels: C
   if (type === 'if') {
     const c = config as { conditions: { left: string; op: string; right: string }[]; combine: string };
     const first = c.conditions[0];
+    if (!first) return 'No conditions';
     const more = c.conditions.length > 1 ? ` ${c.combine} ${c.conditions.length - 1} more` : '';
-    return first ? `${first.left || '…'} ${first.op} ${first.right}${more}` : 'No conditions';
+    const unary = first.op === 'isEmpty' || first.op === 'isNotEmpty' || first.op === 'isTrue';
+    const right = unary ? '' : ` ${shortRef(first.right) || '…'}`;
+    return `${shortRef(first.left) || '…'} ${IF_OP_TEXT[first.op] ?? first.op}${right}${more}`;
   }
   return 'Starts the workflow';
 }

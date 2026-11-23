@@ -10,7 +10,6 @@ services:
       - DATABASE_URL=postgres://postgres:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/flows
       - BETTER_AUTH_SECRET=${SERVICE_BASE64_64_AUTHSECRET}
       - BETTER_AUTH_URL=${SERVICE_URL_FLOWS}
-      - PUBLIC_URL=${SERVICE_URL_FLOWS}
       # Encrypts secrets. Never change it after first deploy, or stored secrets become unreadable.
       - MASTER_KEY=${SERVICE_BASE64_64_MASTERKEY}
       - ROLE=${ROLE:-all}
@@ -19,9 +18,9 @@ services:
       # Only the client hub may frame /iframe.
       - EMBED_ALLOWED_ORIGINS=${EMBED_ALLOWED_ORIGINS:-https://app.alisamadii.com}
       - EMBED_DEFAULT_ALLOWED_HOSTS=${EMBED_DEFAULT_ALLOWED_HOSTS:-*}
-      # Google Calendar integration (OAuth client; redirect = PUBLIC_URL/api/integrations/google/callback)
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      # Client hub API (Google Calendar steps). HUB_API_KEY = the hub's FLOWS_HUB_KEY.
+      - HUB_API_URL=${HUB_API_URL:-https://api.alisamadii.com}
+      - HUB_API_KEY=${HUB_API_KEY:-}
       - TZ=${TZ:-UTC}
     depends_on:
       postgres:

@@ -1,18 +1,20 @@
-import { eq } from 'drizzle-orm';
-
-import { db } from '@/db';
-import { integration, type IntegrationProvider } from '@/db/schema';
-
-import { googleCalendarActions, listCalendars } from './google-calendar';
-import { accessTokenFor, getIntegration, IntegrationError, publicIntegration } from './oauth';
+import { hubCall, hubConfigured, IntegrationError } from './hub';
 import { findAction, PROVIDERS, type ProviderId } from './registry';
 
-const RUNNERS: Record<ProviderId, Record<string, typeof googleCalendarActions[string]>> = {
-  google_calendar: googleCalendarActions,
+// App actions run in the client hub (it owns the Google connection); Flows only
+// sends the workspace id (= hub project id), the rendered params and a key that
+// makes retries safe.
+const HUB_PROCEDURES: Record<ProviderId, Record<string, string>> = {
+  google_calendar: {
+    find_free_slots: 'findFreeSlots',
+    create_event: 'createEvent',
+    list_events: 'listEvents',
+    cancel_event: 'cancelEvent',
+  },
 };
 
-// Runs one app action with the workspace's own connection (looked up by workspace id,
-// never by anything in the workflow JSON).
+// Runs one app action for this workspace (looked up by workspace id, never by
+// anything in the workflow JSON).
 export async function runIntegrationAction(opts: {
   workspaceId: string;
   provider: string;
@@ -21,32 +23,52 @@ export async function runIntegrationAction(opts: {
   idempotencyKey: string;
 }) {
   const spec = findAction(opts.provider, opts.action);
-  const runner = RUNNERS[opts.provider as ProviderId]?.[opts.action];
-  if (!spec || !runner) throw new IntegrationError(`Unknown action ${opts.provider}.${opts.action}`);
+  const procedure = HUB_PROCEDURES[opts.provider as ProviderId]?.[opts.action];
+  if (!spec || !procedure) throw new IntegrationError(`Unknown action ${opts.provider}.${opts.action}`);
   for (const f of spec.fields) {
     if (f.required && !opts.params[f.key]?.trim()) throw new IntegrationError(`"${f.label}" is required`);
   }
-  const row = await getIntegration(opts.workspaceId, opts.provider as IntegrationProvider);
-  if (!row) {
-    throw new IntegrationError(`${PROVIDERS[opts.provider as ProviderId].label} isn't connected. Connect it in Automations → Integrations.`);
-  }
-  const token = await accessTokenFor(row);
-  return runner({ token, settings: row.settings, params: opts.params, idempotencyKey: opts.idempotencyKey });
-}
-
-export async function calendarsFor(workspaceId: string) {
-  const row = await getIntegration(workspaceId, 'google_calendar');
-  if (!row) throw new IntegrationError('Google Calendar is not connected');
-  return listCalendars(await accessTokenFor(row));
+  return hubCall(procedure, { projectId: opts.workspaceId, params: opts.params, idempotencyKey: opts.idempotencyKey });
 }
 
 export { IntegrationError };
 
-// Status for every provider in this workspace (never tokens).
-export async function integrationStatus(workspaceId: string) {
-  const rows = await db.select().from(integration).where(eq(integration.workspaceId, workspaceId));
-  return (Object.keys(PROVIDERS) as ProviderId[]).map((provider) => {
-    const row = rows.find((r) => r.provider === provider);
-    return { provider, label: PROVIDERS[provider].label, connected: Boolean(row), ...(row ? publicIntegration(row) : {}) };
-  });
+export type IntegrationCalendar = { id: string; name: string; primary: boolean; timeZone: string | null };
+
+export type IntegrationStatus = {
+  provider: ProviderId;
+  label: string;
+  connected: boolean;
+  accountEmail?: string;
+  // Why it isn't usable yet, in plain words.
+  reason?: string;
+  calendars?: IntegrationCalendar[];
+};
+
+type HubCalendarStatus = { connected: boolean; reason: string | null; email: string | null; calendars: IntegrationCalendar[] };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Status for every provider in this workspace, from the client hub (never tokens).
+export async function integrationStatus(workspaceId: string): Promise<IntegrationStatus[]> {
+  const label = PROVIDERS.google_calendar.label;
+  const off = (reason: string): IntegrationStatus[] => [{ provider: 'google_calendar', label, connected: false, reason }];
+  if (!hubConfigured()) return off('The client hub connection is not set up on this server (HUB_API_URL, HUB_API_KEY).');
+  // Only workspaces opened from the client hub have a project behind them.
+  if (!UUID.test(workspaceId)) return off('Available in workspaces opened from the client hub.');
+  try {
+    const s = await hubCall<HubCalendarStatus>('calendarStatus', { projectId: workspaceId }, 'query');
+    return [
+      {
+        provider: 'google_calendar',
+        label,
+        connected: s.connected,
+        accountEmail: s.email ?? undefined,
+        reason: s.reason ?? undefined,
+        calendars: s.calendars,
+      },
+    ];
+  } catch (error) {
+    return off(error instanceof Error ? error.message : 'Could not reach the client hub.');
+  }
 }

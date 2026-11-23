@@ -38,7 +38,7 @@ export function NewWorkflowForm({
 
   return (
     <Card>
-      <CardContent className="grid gap-4 pt-6">
+      <CardContent className="grid gap-4">
         <div className="grid gap-1.5">
           <Label htmlFor="wf-name">Name</Label>
           <Input id="wf-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Daily report" autoFocus />

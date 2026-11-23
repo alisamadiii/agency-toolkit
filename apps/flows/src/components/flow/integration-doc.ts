@@ -60,7 +60,9 @@ export function sampleInput(graph: Graph): Record<string, unknown> {
       }
     });
   }
-  return root;
+  // The trigger's saved sample is the real shape; it wins over guesses.
+  const saved = graph.nodes.find((n) => n.type === 'trigger')?.config as { sampleInput?: Record<string, unknown> } | undefined;
+  return { ...root, ...saved?.sampleInput };
 }
 
 const OPS: Record<string, string> = {

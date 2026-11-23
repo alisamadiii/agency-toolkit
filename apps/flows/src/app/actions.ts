@@ -8,14 +8,6 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { run } from '@/db/schema';
 import { enqueueRun, cancelRun as cancelQueuedRun } from '@/lib/engine/queue';
-import { calendarsFor, integrationStatus } from '@/lib/integrations';
-import {
-  disconnect as disconnectIntegration,
-  googleConfigured,
-  startConnect,
-  updateSettings as updateIntegrationSettings,
-} from '@/lib/integrations/oauth';
-import { PROVIDER_IDS, type ProviderId } from '@/lib/integrations/registry';
 import { BLANK, BOOK_A_CALL, EXAMPLE } from '@/lib/workflow-templates';
 import {
   channelCreateSchema,
@@ -244,30 +236,4 @@ export async function testChannelAction(workspaceId: string, id: string, to?: st
     if (!result.ok) throw new Error(result.error ?? 'Send failed');
     return { to: result.to ?? null };
   });
-}
-
-// ---------- Integrations (per workspace) ----------
-
-export async function startIntegrationConnectAction(workspaceId: string, provider: string) {
-  return act(async () => {
-    if (!PROVIDER_IDS.includes(provider as ProviderId)) throw new Error('Unknown integration');
-    if (!googleConfigured()) throw new Error('Google sign-in is not set up on this server (GOOGLE_CLIENT_ID).');
-    return { url: await startConnect(workspaceId, provider as ProviderId) };
-  });
-}
-
-export async function integrationStatusAction(workspaceId: string) {
-  return act(() => integrationStatus(workspaceId));
-}
-
-export async function disconnectIntegrationAction(workspaceId: string, provider: string) {
-  return act(() => disconnectIntegration(workspaceId, provider as ProviderId), `/w/${workspaceId}`);
-}
-
-export async function integrationCalendarsAction(workspaceId: string) {
-  return act(() => calendarsFor(workspaceId));
-}
-
-export async function setIntegrationSettingsAction(workspaceId: string, provider: string, settings: { calendarId?: string; timezone?: string }) {
-  return act(() => updateIntegrationSettings(workspaceId, provider as ProviderId, settings), `/w/${workspaceId}`);
 }

@@ -70,7 +70,13 @@ export const EXAMPLE: Graph = {
 // your Google Calendar → book it with them as a guest.
 export const BOOK_A_CALL: Graph = {
   nodes: [
-    { id: 'trigger', type: 'trigger', name: 'Trigger', position: { x: 0, y: 120 }, config: {} },
+    {
+      id: 'trigger',
+      type: 'trigger',
+      name: 'Trigger',
+      position: { x: 0, y: 120 },
+      config: { sampleInput: { name: 'Jane Doe', email: 'jane@example.com', message: 'Looking forward to it' } },
+    },
     {
       id: 'find_free_slots_1',
       type: 'app',

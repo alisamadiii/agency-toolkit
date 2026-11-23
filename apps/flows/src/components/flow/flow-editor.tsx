@@ -49,8 +49,10 @@ import {
   type FlowNode,
 } from './graph-utils';
 import { IntegrateDialog } from './integrate-dialog';
+import { inputFields, sampleInput } from './integration-doc';
 import { NodePanel, type NodeResult, type WorkflowSettings } from './node-panel';
 import { ChannelsContext, nodeTypes } from './nodes';
+import { buildVariables } from './variables';
 
 const CodeEditor = dynamic(() => import('@/components/code-editor'), { ssr: false });
 
@@ -77,7 +79,13 @@ export type EditorWorkflow = {
 
 type RunSummary = { id: string; status: string; trigger: string; queuedAt: Date };
 type ScheduleRow = { id: string; cron: string; timezone: string; enabled: boolean; nextRunAt: Date; lastRunAt: Date | null };
-type RunState = { id: string; status: string; error: string | null; results: Record<string, NodeResult> };
+type RunState = {
+  id: string;
+  status: string;
+  error: string | null;
+  input: Record<string, unknown>;
+  results: Record<string, NodeResult>;
+};
 
 type Props = {
   workspaceId: string;
@@ -197,7 +205,7 @@ function Editor({
             attempts: s.attempts,
           };
         }
-        setRun({ id: r.id, status: r.status, error: r.error, results });
+        setRun({ id: r.id, status: r.status, error: r.error, input: r.input ?? {}, results });
         paint(results);
         if (!follow || (r.status !== 'queued' && r.status !== 'running')) return r.status;
         await new Promise((resolve) => setTimeout(resolve, 800));
@@ -415,13 +423,31 @@ function Editor({
   });
 
   const selected = nodes.find((n) => n.id === selectedId);
-  const upstream = selected
-    ? [...upstreamOf(selected.id, edges)].map((id) => {
-        const n = nodes.find((x) => x.id === id)!;
-        const cfg = n.data.config as { provider?: string; action?: string };
-        return { id, type: n.type as NodeType, name: n.data.name, provider: cfg.provider, action: cfg.action };
-      })
-    : [];
+  const trigger = nodes.find((n) => n.type === 'trigger');
+  const triggerSample = (trigger?.data.config as { sampleInput?: Record<string, unknown> } | undefined)?.sampleInput;
+  const usedInputFields = useMemo(() => inputFields(currentGraph).map((f) => f.path), [currentGraph]);
+  const variables = useMemo(() => {
+    if (!selected) return [];
+    const upstream = [...upstreamOf(selected.id, edges)].map((id) => {
+      const n = nodes.find((x) => x.id === id)!;
+      return { id, type: n.type as NodeType, name: n.data.name, config: n.data.config };
+    });
+    return buildVariables({
+      sample: triggerSample,
+      usedInputFields,
+      lastRunInput: run?.input,
+      upstream,
+      results: run?.results,
+      secretNames,
+    });
+  }, [selected, edges, nodes, triggerSample, usedInputFields, run, secretNames]);
+
+  const nodeNames = useMemo(() => Object.fromEntries(nodes.map((n) => [n.id, n.data.name])), [nodes]);
+
+  const saveSample = (sample: Record<string, unknown>) => {
+    if (!trigger) return;
+    updateNode(trigger.id, { config: { ...trigger.data.config, sampleInput: sample } });
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -553,8 +579,10 @@ function Editor({
             onChange={(patch) => updateNode(selected.id, patch)}
             onDelete={() => deleteNode(selected.id)}
             onClose={() => setSelectedId(null)}
-            upstream={upstream}
-            secretNames={secretNames}
+            variables={variables}
+            onSaveSample={saveSample}
+            nodeNames={nodeNames}
+            inferredSample={sampleInput({ ...currentGraph, nodes: currentGraph.nodes.filter((n) => n.type !== 'trigger') })}
             channels={channels}
             integrations={integrations}
             result={run?.results[selected.id]}

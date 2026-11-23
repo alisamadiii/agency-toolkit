@@ -14,8 +14,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { db } from '@/db';
 import { workflow } from '@/db/schema';
 import { decrypt } from '@/lib/crypto';
+import { embedAllowedOrigins } from '@/lib/embed';
 import { integrationStatus } from '@/lib/integrations';
-import { googleConfigured } from '@/lib/integrations/oauth';
 import * as service from '@/lib/service';
 import { isUuid } from '@/lib/utils';
 
@@ -117,10 +117,10 @@ export default async function WorkspacePage({ params, searchParams }: PageProps<
           <Card>
             <CardHeader>
               <CardTitle>Integrations</CardTitle>
-              <CardDescription>Accounts this workspace has connected, used by app steps on the canvas.</CardDescription>
+              <CardDescription>Apps connected in the client hub for this project, used by app steps on the canvas.</CardDescription>
             </CardHeader>
             <CardContent>
-              <IntegrationsCard workspaceId={id} integrations={integrations} configured={googleConfigured()} />
+              <IntegrationsCard integrations={integrations} hubOrigins={embedAllowedOrigins()} />
             </CardContent>
           </Card>
         </TabsContent>

@@ -6,6 +6,7 @@ import { decrypt, hmacHex } from '@/lib/crypto';
 import { sendToChannel } from '@/lib/channels/senders';
 import { guardedRequest } from '@/lib/net';
 import { channelForSend } from '@/lib/service';
+import { appUrl } from '@/lib/base-url';
 
 type RunRow = typeof run.$inferSelect;
 
@@ -61,7 +62,7 @@ export async function sendRunAlerts(row: RunRow) {
   const [ws] = await db.select().from(workspace).where(eq(workspace.id, row.workspaceId));
   const duration =
     row.startedAt && row.finishedAt ? `${((row.finishedAt.getTime() - row.startedAt.getTime()) / 1000).toFixed(1)}s` : '—';
-  const base = process.env.PUBLIC_URL?.replace(/\/$/, '');
+  const base = appUrl();
   const lines = [
     `Workspace: ${ws?.name ?? row.workspaceId}`,
     `Trigger: ${row.trigger} · attempt ${row.attempt}/${row.maxAttempts} · ${duration}`,

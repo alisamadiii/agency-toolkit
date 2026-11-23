@@ -8,6 +8,7 @@ import { topoOrder, type GraphEdge, type GraphNode, type Step } from '@/lib/sche
 import { sendToChannel, type SendResult } from '@/lib/channels/senders';
 import { channelForSend } from '@/lib/service';
 import { runIntegrationAction } from '@/lib/integrations';
+import { findAction } from '@/lib/integrations/registry';
 import { renderText } from '@/lib/template';
 
 import { evaluateIf } from './conditions';
@@ -243,6 +244,17 @@ async function runApp(
 ): Promise<StepResult> {
   const params: Record<string, string> = {};
   for (const [k, v] of Object.entries(config.params)) params[k] = renderText(v, ctx);
+  // A required field whose template resolved to nothing: say which reference was empty.
+  for (const f of findAction(config.provider, config.action)?.fields ?? []) {
+    const template = config.params[f.key]?.trim();
+    if (f.required && template && !params[f.key]?.trim()) {
+      return {
+        ok: false,
+        output: null,
+        error: `"${f.label}" is empty: ${template} has no value in this run. Point it at a step that runs before this one.`,
+      };
+    }
+  }
   try {
     const output = await Promise.race([
       runIntegrationAction({

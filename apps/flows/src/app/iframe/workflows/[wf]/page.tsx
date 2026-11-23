@@ -9,6 +9,7 @@ import * as service from '@/lib/service';
 import { isUuid } from '@/lib/utils';
 
 import { embedPage } from '../../session';
+import { appUrl } from '@/lib/base-url';
 
 // Canvas editor, edge to edge inside the hub's iframe.
 export default async function IframeWorkflow({ params, searchParams }: PageProps<'/iframe/workflows/[wf]'>) {
@@ -27,7 +28,7 @@ export default async function IframeWorkflow({ params, searchParams }: PageProps
     integrationStatus(ws.id),
   ]);
   const h = await headers();
-  const origin = process.env.PUBLIC_URL?.replace(/\/$/, '') || `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host')}`;
+  const origin = appUrl() || `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host')}`;
   const fullAccess = roleAtLeast(session.role, 'full-access');
 
   return (

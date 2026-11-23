@@ -99,8 +99,17 @@ export const appConfigSchema = z.object({
   continueOnError: z.boolean().default(false),
 });
 
+// sampleInput: example of the JSON the app sends. Drives {{input.…}} suggestions and docs;
+// the engine ignores it.
+export const triggerConfigSchema = z
+  .object({ sampleInput: z.record(z.string(), z.unknown()).optional() })
+  .default({})
+  .refine((c) => !c.sampleInput || JSON.stringify(c.sampleInput).length <= 20_000, {
+    message: 'Sample input is too large (20 KB max)',
+  });
+
 export const graphNodeSchema = z.discriminatedUnion('type', [
-  z.object({ ...nodeBase, type: z.literal('trigger'), config: z.object({}).default({}) }),
+  z.object({ ...nodeBase, type: z.literal('trigger'), config: triggerConfigSchema }),
   z.object({ ...nodeBase, type: z.literal('http'), config: httpConfigSchema }),
   z.object({ ...nodeBase, type: z.literal('code'), config: codeConfigSchema }),
   z.object({ ...nodeBase, type: z.literal('if'), config: ifConfigSchema }),

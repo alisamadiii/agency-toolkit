@@ -123,7 +123,7 @@ curl -s $URL/runs/<runId> -H "authorization: Bearer $KEY"     # step outputs and
 | `GET /secrets`, `PUT/DELETE /secrets/:NAME` | Values are write-only |
 | `GET /channel-types`, `GET/POST /channels`, `GET/PATCH/DELETE /channels/:id`, `POST /channels/:id/test` | This workspace's notification channels |
 | `GET /signing-secret` | Secret that signs this workspace's callbacks |
-| `GET /integrations`, `POST /integrations/:provider/connect`, `DELETE /integrations/:provider` | Connected apps (Google Calendar) |
+| `GET /integrations` | Connected apps (Google Calendar, from the client hub) |
 | `POST /validate` | Check steps and preview the next 5 cron times |
 | `POST /api/hooks/:workflowId/:token` | Public trigger (no key); the JSON body becomes `input` |
 
@@ -164,43 +164,40 @@ A workflow is `{ nodes, edges }` (the dashboard canvas edits the same JSON):
   `{ error }`). Whole-run retries: `maxAttempts`; whole-run limit: `timeoutSec`.
 - Run output is the output of the end node that ran (or `{ nodeId: output }` when several did).
 
-### Integrations (per workspace): Google Calendar
+### Integrations: Google Calendar (through the client hub)
 
-Each workspace connects its **own** accounts in the **Integrations** tab (dashboard and
-`/iframe`). Connected apps appear under **Apps** in the canvas sidebar.
+Google lives in the **client hub**, not in Flows. A project connects Google Calendar in the
+hub's **Calendar** app; workflows in that project's workspace (workspace id = hub project id)
+use it. The **Integrations** tab only shows the status and links to the hub. Connected apps
+appear under **Apps** in the canvas sidebar.
 
 Google Calendar actions (node type `app`, `provider: "google_calendar"`):
 
 | Action | Params (templates) | Output |
 |---|---|---|
-| `find_free_slots` | `durationMinutes`, `from` ("now"), `to` ("+7 days"), `dayStart`/`dayEnd` ("09:00"/"17:00"), `days`, `timezone`, `limit` | `{ slots, first: { start, end }, timezone }` |
-| `create_event` | `title`*, `start`*, `durationMinutes`, `guestEmail`, `guestName`, `description`, `location`, `addMeet`, `notifyGuests`, `timezone` | `{ eventId, link, meetLink, start, end, guest }` |
-| `list_events` | `from`, `to` (≤ 62 days) | `{ events, count }` |
-| `cancel_event` | `eventId`*, `notifyGuests` | `{ cancelled }` |
+| `find_free_slots` | `durationMinutes`, `from` ("now"), `to` ("+7 days"), `dayStart`/`dayEnd` ("09:00"/"17:00"), `days`, `timezone`, `limit`, `calendarId` | `{ slots, first: { start, end }, timezone }` |
+| `create_event` | `title`*, `start`*, `durationMinutes`, `guestEmail`, `guestName`, `description`, `location`, `addMeet`, `notifyGuests`, `timezone`, `calendarId` | `{ eventId, link, meetLink, start, end, guest }` |
+| `list_events` | `from`, `to` (≤ 62 days), `calendarId` | `{ events, count }` |
+| `cancel_event` | `eventId`*, `notifyGuests`, `calendarId` | `{ cancelled }` |
 
-- Connect opens Google's sign-in in a popup (Google doesn't allow it inside iframes). The
-  popup carries a hashed, single-use, 10-minute state tied to the workspace; PKCE; offline access.
-- Tokens are AES-GCM encrypted with `MASTER_KEY`, refreshed automatically, never returned by
-  the API or shown in run output. A failed refresh marks the integration "Reconnect needed".
-- A node can only use its own workspace's connection. `create_event` uses an event id derived
-  from the run and node, so a retry never books twice.
-- Disconnect revokes access at Google.
+How it works:
+- Each step calls the hub API's `flowsService` tRPC routes (`POST {HUB_API_URL}/api/trpc/flowsService.createEvent`
+  …) with `Authorization: Bearer {HUB_API_KEY}`. The hub checks the key in constant time,
+  rate limits per project, and only reaches the calendar of the project id it is sent.
+- Flows sends its own workspace id; nothing in the workflow JSON can pick another project.
+- `create_event` sends an idempotency key (run + node), so a retry never books twice.
+- No Google client id, secret or token is stored in Flows. Dashboard-only workspaces (not
+  opened from the hub) have no project, so calendar steps aren't available there.
 - "New workflow → Book a call" builds: trigger (`name`, `email`) → find free time → book it.
 
-API: `GET /integrations`, `POST /integrations/google_calendar/connect` (→ `{ url }` to open in a
-browser), `DELETE /integrations/google_calendar`.
+API: `GET /integrations` (status from the hub).
 
-Setup (once): in Google Cloud (the project with the verified consent screen) create an OAuth
-client ID of type **Web application** and add the redirect URIs
-`https://flows.alisamadii.com/api/integrations/google/callback` and
-`http://localhost:3300/api/integrations/google/callback`. Set `GOOGLE_CLIENT_ID`,
-`GOOGLE_CLIENT_SECRET` and `PUBLIC_URL`.
+Setup: generate one secret (`openssl rand -hex 32`); set it as `HUB_API_KEY` here and
+`FLOWS_HUB_KEY` in the hub API, and point `HUB_API_URL` at the hub API.
 
-Testing without Google: `node scripts/fake-google.mjs`, start Flows with `GOOGLE_CLIENT_ID=x
-GOOGLE_CLIENT_SECRET=x GOOGLE_OAUTH_BASE=http://localhost:3399 GOOGLE_AUTH_URL=http://localhost:3399/auth
-GOOGLE_USERINFO_URL=http://localhost:3399/userinfo GOOGLE_API_BASE=http://localhost:3399
-PUBLIC_URL=http://localhost:3300 pnpm dev`, then
-`FLOWS_ADMIN_KEY=… node --env-file=.env.local scripts/smoke-integrations.mjs`.
+Testing without the hub: `node scripts/fake-hub.mjs`, start Flows with
+`HUB_API_URL=http://localhost:3399 HUB_API_KEY=test-key-test-key-test-key-test-key pnpm dev`,
+then `FLOWS_ADMIN_KEY=… node --env-file=.env.local scripts/smoke-integrations.mjs`.
 
 ### Notifications (per workspace)
 
@@ -219,7 +216,7 @@ the field out) keeps the stored value.
 
 - **Notify node**: `{ "type": "notify", "config": { "channelId": "…", "title": "New booking", "message": "{{input.name}} booked", "to": "{{input.phone}}" } }`.
 - **Run alerts**: on a workflow, `"alertOn": "failure" | "always" | "never"` and
-  `"alertChannelIds": ["…"]`. Alerts include the error and a link to the run (set `PUBLIC_URL`).
+  `"alertChannelIds": ["…"]`. Alerts include the error and a link to the run (set `BETTER_AUTH_URL`).
 
 Building a client's own "Notifications" screen in the client hub (with that client's workspace key):
 
@@ -291,9 +288,9 @@ In the hub (`saas/Portfolio`): `packages/trpc/src/lib/flows.ts` + `routers/autom
 | Variable | Default | Purpose |
 |---|---|---|
 | `DATABASE_URL` | — | Postgres connection |
-| `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` | — | Dashboard login |
+| `BETTER_AUTH_SECRET` | — | Dashboard login |
+| `BETTER_AUTH_URL` | request origin | Public URL of this server: login, trigger URLs, run links |
 | `MASTER_KEY` | — | Encrypts secrets and signing keys |
-| `PUBLIC_URL` | request origin | Base for trigger URLs |
 | `ROLE` | `all` | `all`, `web` (API/dashboard only) or `worker` |
 | `WORKER_CONCURRENCY` | `4` | Runs at once per container |
 | `RUN_RETENTION_DAYS` | `30` | Finished runs older than this are deleted |
@@ -301,4 +298,4 @@ In the hub (`saas/Portfolio`): `packages/trpc/src/lib/flows.ts` + `routers/autom
 | `DENO_BIN` | `deno` | Deno binary (set in the image) |
 | `EMBED_ALLOWED_ORIGINS` | `https://app.alisamadii.com` | Who may frame `/iframe` (comma separated) |
 | `EMBED_DEFAULT_ALLOWED_HOSTS` | `*` | Allowed hosts for workspaces the hub creates |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | — | Google sign-in for the Calendar integration |
+| `HUB_API_URL`, `HUB_API_KEY` | — | Client hub API and shared key (= hub `FLOWS_HUB_KEY`) for Google Calendar steps |
