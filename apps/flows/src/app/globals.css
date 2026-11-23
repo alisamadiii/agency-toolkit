@@ -4,11 +4,50 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Client Hub design tokens (from the hub's tokens.css). */
+@theme {
+  --color-canvas: #f7f6f4;
+  --color-surface: #ffffff;
+  --color-sidebar: #fbfaf8;
+  --color-subtle: #f4f2ef;
+  --color-hover: #f0ede9;
+  --color-selected: #efebe6;
+  --color-tile: #f2efeb;
+  --color-line: #e7e3de;
+  --color-divider: #efece8;
+  --color-line-strong: #dcd7d1;
+  --color-line-hover: #d6d0c9;
+  --color-ink: #221f1c;
+  --color-ink-2: #3a3531;
+  --color-ink-3: #4a443f;
+  --color-dim: #6b6560;
+  --color-faint: #8a847e;
+  --color-coral: #fc8464;
+  --color-coral-soft: #feede6;
+  --color-coral-text: #c2502f;
+  --color-coral-deep: #9a3a1e;
+  --color-success: #1f9d55;
+  --color-success-text: #1e7a45;
+  --color-success-soft: #e6f4ec;
+  --color-info: #2f6fed;
+  --color-info-text: #1a4fb5;
+  --color-info-soft: #e8f0fe;
+  --color-warning: #e0a33a;
+  --color-warning-soft: #fdf6ea;
+  --color-danger: #a12c2c;
+  --color-danger-soft: #fceded;
+  --color-badge-neutral: #f0eeeb;
+  --radius-control: 6px;
+  --radius-inner: 8px;
+  --radius-card: 10px;
+  --shadow-tab: 0 1px 2px rgb(34 31 28 / 0.08);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -50,73 +89,43 @@
 
 /* Business Tracker theme — blue identity on cool neutral surfaces. */
 :root {
-  --background: oklch(0.985 0.004 250);
-  --foreground: oklch(0.17 0.015 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.17 0.015 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.17 0.015 260);
-  --primary: oklch(0.55 0.19 258);
-  --primary-foreground: oklch(0.985 0.005 250);
-  --secondary: oklch(0.955 0.01 252);
-  --secondary-foreground: oklch(0.3 0.04 258);
-  --muted: oklch(0.96 0.008 250);
-  --muted-foreground: oklch(0.52 0.02 255);
-  --accent: oklch(0.94 0.025 252);
-  --accent-foreground: oklch(0.38 0.1 258);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.91 0.012 250);
-  --input: oklch(0.91 0.012 250);
-  --ring: oklch(0.62 0.15 258);
-  --chart-1: oklch(0.55 0.19 258);
-  --chart-2: oklch(0.7 0.13 215);
-  --chart-3: oklch(0.56 0.2 290);
-  --chart-4: oklch(0.72 0.12 180);
-  --chart-5: oklch(0.47 0.18 272);
-  --radius: 0.75rem;
-  --sidebar: oklch(0.975 0.006 250);
-  --sidebar-foreground: oklch(0.25 0.02 258);
-  --sidebar-primary: oklch(0.55 0.19 258);
-  --sidebar-primary-foreground: oklch(0.985 0.005 250);
-  --sidebar-accent: oklch(0.93 0.02 252);
-  --sidebar-accent-foreground: oklch(0.38 0.1 258);
-  --sidebar-border: oklch(0.9 0.012 250);
-  --sidebar-ring: oklch(0.62 0.15 258);
+  /* Client Hub palette (light only): shadcn variables mapped onto the hub tokens. */
+  --background: var(--color-canvas);
+  --foreground: var(--color-ink);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-ink);
+  --popover: var(--color-surface);
+  --popover-foreground: var(--color-ink);
+  /* Coral fills always take ink text (white on coral fails contrast). */
+  --primary: var(--color-coral);
+  --primary-foreground: var(--color-ink);
+  --secondary: var(--color-subtle);
+  --secondary-foreground: var(--color-ink);
+  --muted: var(--color-subtle);
+  --muted-foreground: var(--color-dim);
+  --accent: var(--color-hover);
+  --accent-foreground: var(--color-ink);
+  --destructive: var(--color-danger);
+  --border: var(--color-line);
+  --input: var(--color-line-strong);
+  --ring: var(--color-coral);
+  --radius: 10px;
+  --chart-1: oklch(0.83 0.11 45);
+  --chart-2: oklch(0.78 0.14 42);
+  --chart-3: oklch(0.735 0.15 40);
+  --chart-4: oklch(0.66 0.15 38);
+  --chart-5: oklch(0.56 0.13 36);
+  --sidebar: var(--color-sidebar);
+  --sidebar-foreground: var(--color-ink-2);
+  --sidebar-primary: var(--color-coral);
+  --sidebar-primary-foreground: var(--color-ink);
+  --sidebar-accent: var(--color-selected);
+  --sidebar-accent-foreground: var(--color-ink);
+  --sidebar-border: var(--color-line);
+  --sidebar-ring: var(--color-coral);
 }
 
-.dark {
-  --background: oklch(0.14 0.015 262);
-  --foreground: oklch(0.97 0.005 250);
-  --card: oklch(0.185 0.02 260);
-  --card-foreground: oklch(0.97 0.005 250);
-  --popover: oklch(0.185 0.02 260);
-  --popover-foreground: oklch(0.97 0.005 250);
-  --primary: oklch(0.65 0.17 258);
-  --primary-foreground: oklch(0.13 0.03 260);
-  --secondary: oklch(0.25 0.025 260);
-  --secondary-foreground: oklch(0.97 0.005 250);
-  --muted: oklch(0.24 0.02 260);
-  --muted-foreground: oklch(0.7 0.02 255);
-  --accent: oklch(0.28 0.04 258);
-  --accent-foreground: oklch(0.9 0.04 255);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(0.95 0.01 250 / 10%);
-  --input: oklch(0.95 0.01 250 / 15%);
-  --ring: oklch(0.6 0.14 258);
-  --chart-1: oklch(0.65 0.17 258);
-  --chart-2: oklch(0.75 0.13 215);
-  --chart-3: oklch(0.65 0.2 290);
-  --chart-4: oklch(0.76 0.12 180);
-  --chart-5: oklch(0.56 0.18 272);
-  --sidebar: oklch(0.165 0.018 262);
-  --sidebar-foreground: oklch(0.95 0.008 250);
-  --sidebar-primary: oklch(0.65 0.17 258);
-  --sidebar-primary-foreground: oklch(0.13 0.03 260);
-  --sidebar-accent: oklch(0.26 0.035 258);
-  --sidebar-accent-foreground: oklch(0.9 0.04 255);
-  --sidebar-border: oklch(0.95 0.01 250 / 10%);
-  --sidebar-ring: oklch(0.6 0.14 258);
-}
+/* No dark theme: Flows follows the Client Hub, which is light only. */
 
 @layer base {
   * {
@@ -172,4 +181,11 @@
 pre.hljs::-webkit-scrollbar-thumb,
 .scrollbar-on-dark::-webkit-scrollbar-thumb {
   background-color: rgb(255 255 255 / 0.22);
+}
+
+/* Solid fills for form controls so they stand out on the canvas background (as in the hub). */
+[data-slot="input"],
+[data-slot="textarea"],
+[data-slot="select-trigger"] {
+  background-color: var(--card);
 }

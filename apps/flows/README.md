@@ -19,6 +19,8 @@ next to Postgres on Coolify.
   email (SMTP), SMS and WhatsApp (Twilio), Microsoft Teams, Google Chat, ntfy or webhook
   channels. Use them in a **Notify** node, or as **run alerts** (on failure or every run).
 - **Dashboard**: a small owner-only UI for workspaces, keys, secrets, workflows and run logs.
+- **Client hub embed**: `/iframe` gives each hub project its own workspace inside the hub,
+  locked to that project (see below).
 
 ## How it works
 
@@ -203,6 +205,38 @@ or `*` for any public host. Private, loopback, link-local (cloud metadata) and C
 addresses are always blocked, including public names that resolve to them, so a client
 can't reach Postgres, Coolify or other containers.
 
+## Embed in the client hub (`/iframe`)
+
+The client hub shows each project's own workspace inside an iframe, styled like the hub.
+Clients manage their workflows, runs, notification channels and secrets there; nothing
+has to be rebuilt in the hub.
+
+How a session starts:
+
+1. The hub's **server** calls `POST /api/v1/embed-sessions` with an **admin** key:
+   `{ "projectId": "<hub project uuid>", "projectName": "Acme", "user": { "email", "name" }, "role": "full-access" | "content-editor" | "view-only" }`.
+   Flows finds the workspace for that project (`workspace.external_id`) or creates it, and
+   returns `{ url }`: a one-time link, valid for 60 seconds.
+2. The hub puts the link in `<iframe src>`. `/iframe/start` checks the ticket (unused, not
+   expired, referer is the hub), then sets an `HttpOnly; Secure; SameSite=None; Partitioned`
+   cookie, signed with `MASTER_KEY` and pinned to that one workspace for 8 hours.
+3. Every `/iframe` page and action reads the workspace **only** from that cookie. A request
+   for another workspace's data, or with an edited cookie, is refused.
+4. When the session ends, the iframe posts `{ source: "flows", type: "session-expired" }` to
+   the hub, which fetches a new link.
+
+Roles: `view-only` can look at workflows and runs; `content-editor` can also edit workflows,
+schedules, channels and secrets; `full-access` also manages API keys, trigger URLs and the
+callback signing secret.
+
+Framing: `/iframe/**` sends `Content-Security-Policy: frame-ancestors <EMBED_ALLOWED_ORIGINS>`
+(default `https://app.alisamadii.com`) and `Referrer-Policy: no-referrer`; every other page
+sends `frame-ancestors 'none'` and `X-Frame-Options: DENY`.
+
+In the hub (`saas/Portfolio`): `packages/trpc/src/lib/flows.ts` + `routers/automations.ts`
+(api, env `FLOWS_URL`, `FLOWS_API_KEY`) and the **Automations** page
+(`apps/hub/components/automations/automations-page.tsx`, env `NEXT_PUBLIC_FLOWS_URL`).
+
 ## Deploy (Coolify)
 
 1. New resource → **Docker Compose** → this repo, base directory `apps/flows`,
@@ -224,3 +258,5 @@ can't reach Postgres, Coolify or other containers.
 | `RUN_RETENTION_DAYS` | `30` | Finished runs older than this are deleted |
 | `API_RATE_LIMIT_PER_MIN` | `600` | Requests per key per minute, per container |
 | `DENO_BIN` | `deno` | Deno binary (set in the image) |
+| `EMBED_ALLOWED_ORIGINS` | `https://app.alisamadii.com` | Who may frame `/iframe` (comma separated) |
+| `EMBED_DEFAULT_ALLOWED_HOSTS` | `*` | Allowed hosts for workspaces the hub creates |

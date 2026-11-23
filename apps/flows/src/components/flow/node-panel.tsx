@@ -5,6 +5,7 @@ import { Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
+import { useApp } from '@/components/app-context';
 import { CopyText } from '@/components/copy-text';
 import { RotateTrigger, Schedules } from '@/components/dashboard-forms';
 import { StatusBadge } from '@/components/status-badge';
@@ -396,6 +397,7 @@ function IfSettings({ config, onChange }: { config: IfConfig; onChange: (c: IfCo
 // ---------- Trigger ----------
 
 function TriggerSettings(props: Parameters<typeof NodePanel>[0]) {
+  const { paths, canManageKeys } = useApp();
   const [input, setInput] = useState('{\n  \n}');
   const s = props.settings!;
   const set = (patch: Partial<WorkflowSettings>) => props.onSettingsChange?.({ ...s, ...patch });
@@ -419,7 +421,7 @@ function TriggerSettings(props: Parameters<typeof NodePanel>[0]) {
         <p className="text-xs text-muted-foreground">Cron: minute hour day month weekday. At least 1 minute apart.</p>
       </div>
 
-      {props.triggerUrl && (
+      {props.triggerUrl && canManageKeys && (
         <div className="grid gap-2">
           <Label>Trigger URL</Label>
           <CopyText text={props.triggerUrl} className="break-all rounded-md border bg-muted/40 p-2 text-left font-mono text-[11px]">
@@ -469,7 +471,7 @@ function TriggerSettings(props: Parameters<typeof NodePanel>[0]) {
         {props.channels.length === 0 ? (
           <p className="text-xs text-muted-foreground">
             No channels yet.{' '}
-            <a href={`/w/${props.workspaceId}?tab=notifications`} className="underline">
+            <a href={paths.workspace(props.workspaceId, 'notifications')} className="underline">
               Add one in this workspace&apos;s notifications
             </a>
             .
@@ -516,6 +518,7 @@ function NotifySettings({
   workspaceId: string;
   onChange: (c: NotifyConfig) => void;
 }) {
+  const { paths } = useApp();
   const channel = channels.find((c) => c.id === config.channelId);
   const spec = channel ? CHANNELS[channel.type as ChannelType] : null;
 
@@ -523,7 +526,7 @@ function NotifySettings({
     return (
       <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
         This workspace has no notification channels yet.{' '}
-        <a href={`/w/${workspaceId}?tab=notifications`} className="text-foreground underline">
+        <a href={paths.workspace(workspaceId, 'notifications')} className="text-foreground underline">
           Add Slack, email, SMS…
         </a>{' '}
         then come back.

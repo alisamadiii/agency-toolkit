@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 
-import { createWorkflowAction } from '@/app/actions';
+import { useApp } from '@/components/app-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,8 @@ import { Label } from '@/components/ui/label';
 
 export function NewWorkflowForm({ workspaceId, hasHttpbin }: { workspaceId: string; hasHttpbin: boolean }) {
   const router = useRouter();
+  const { actions, paths } = useApp();
+  const { createWorkflowAction } = actions;
   const [name, setName] = useState('');
   const [pending, start] = useTransition();
 
@@ -19,7 +21,7 @@ export function NewWorkflowForm({ workspaceId, hasHttpbin }: { workspaceId: stri
     start(async () => {
       const res = await createWorkflowAction(workspaceId, name || (template === 'example' ? 'Example workflow' : ''), template);
       if (!res.ok) return void toast.error(res.error);
-      router.push(`/w/${workspaceId}/workflows/${res.data!.id}`);
+      router.push(paths.workflow(workspaceId, res.data!.id));
     });
 
   return (

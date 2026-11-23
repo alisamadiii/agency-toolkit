@@ -74,6 +74,8 @@ export const workspace = pgTable('workspace', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
+  // The client hub project this workspace belongs to (one workspace per hub project).
+  externalId: text('external_id').unique(),
   // Hosts HTTP and script steps may reach. "*" means any public host (admin only).
   allowedHosts: text('allowed_hosts').array().notNull().default(sql`'{}'::text[]`),
   maxWorkflows: integer('max_workflows').notNull().default(50),
@@ -114,6 +116,26 @@ export const secret = pgTable(
   },
   (t) => [uniqueIndex('secret_workspace_name_idx').on(t.workspaceId, t.name)]
 );
+
+// ---------- Client hub embed ----------
+
+export const EMBED_ROLES = ['view-only', 'content-editor', 'full-access'] as const;
+export type EmbedRole = (typeof EMBED_ROLES)[number];
+
+// Single-use, short-lived ticket the hub's server trades for an /iframe session.
+// Only the SHA-256 of the ticket is stored.
+export const embedTicket = pgTable('embed_ticket', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  hash: text('hash').notNull().unique(),
+  workspaceId: uuid('workspace_id')
+    .notNull()
+    .references(() => workspace.id, { onDelete: 'cascade' }),
+  role: text('role').$type<EmbedRole>().notNull(),
+  user: jsonb('user').$type<{ id?: string; email?: string; name?: string }>().notNull().default({}),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 // ---------- Notifications ----------
 

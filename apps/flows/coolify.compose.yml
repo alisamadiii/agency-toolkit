@@ -16,6 +16,9 @@ services:
       - ROLE=${ROLE:-all}
       - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-4}
       - RUN_RETENTION_DAYS=${RUN_RETENTION_DAYS:-30}
+      # Only the client hub may frame /iframe.
+      - EMBED_ALLOWED_ORIGINS=${EMBED_ALLOWED_ORIGINS:-https://app.alisamadii.com}
+      - EMBED_DEFAULT_ALLOWED_HOSTS=${EMBED_DEFAULT_ALLOWED_HOSTS:-*}
       - TZ=${TZ:-UTC}
     depends_on:
       postgres:

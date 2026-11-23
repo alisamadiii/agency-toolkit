@@ -18,14 +18,13 @@ import {
   type Edge,
 } from '@xyflow/react';
 import { ArrowLeft, Bell, Braces, Code2, GitBranch, Globe, Loader2, Play, Plug, Save } from 'lucide-react';
-import { useTheme } from 'next-themes';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
-import { getRunAction, runWorkflowAction, saveGraphAction, saveWorkflowAction } from '@/app/actions';
+import { useApp } from '@/components/app-context';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -115,10 +114,12 @@ function Editor({
   channels = [],
   runs,
   initialRunId,
-  readOnly,
+  readOnly: readOnlyProp,
 }: Props) {
   const router = useRouter();
-  const { resolvedTheme } = useTheme();
+  const { actions, paths, canEdit, canManageKeys } = useApp();
+  const { getRunAction, runWorkflowAction, saveGraphAction } = actions;
+  const readOnly = readOnlyProp || !canEdit;
   const { screenToFlowPosition, getNodes, getEdges, setCenter, getZoom } = useReactFlow();
   const initial = useMemo(() => toFlow(workflow.graph), [workflow.graph]);
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(initial.nodes);
@@ -198,7 +199,7 @@ function Editor({
         await new Promise((resolve) => setTimeout(resolve, 800));
       }
     },
-    [paint]
+    [getRunAction, paint]
   );
 
   useEffect(() => {
@@ -412,7 +413,7 @@ function Editor({
     <div className="flex h-full flex-col">
       {/* Toolbar */}
       <div className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
-        <Link href={`/w/${workspaceId}`} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <Link href={paths.workspace(workspaceId)} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4" /> {workspaceName}
         </Link>
         <span className="text-muted-foreground">/</span>
@@ -426,7 +427,7 @@ function Editor({
         <div className="ml-auto flex items-center gap-2">
           {run && (
             <span className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Link href={`/runs/${run.id}`} className="hover:underline">
+              <Link href={paths.run(run.id)} className="hover:underline">
                 Last run
               </Link>
               <StatusBadge status={run.status} />
@@ -437,9 +438,11 @@ function Editor({
               <label className="flex items-center gap-2 text-sm text-muted-foreground">
                 Active <Switch checked={enabled} onCheckedChange={setEnabled} />
               </label>
-              <Button size="sm" variant="ghost" onClick={() => setIntegrateOpen(true)}>
-                <Plug /> Use in app
-              </Button>
+              {canManageKeys && (
+                <Button size="sm" variant="ghost" onClick={() => setIntegrateOpen(true)}>
+                  <Plug /> Use in app
+                </Button>
+              )}
               <Button size="sm" variant="ghost" onClick={() => setJsonOpen(true)}>
                 <Braces /> JSON
               </Button>
@@ -505,7 +508,7 @@ function Editor({
             nodesConnectable={!readOnly}
             elementsSelectable
             deleteKeyCode={readOnly ? null : ['Backspace', 'Delete']}
-            forceColorMode={resolvedTheme === 'dark' ? 'dark' : 'light'}
+            forceColorMode="light"
             fitView
             fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
           >
@@ -611,6 +614,7 @@ function JsonDialog({
   workflowId: string;
   value: unknown;
 }) {
+  const { saveWorkflowAction } = useApp().actions;
   const router = useRouter();
   // Mounted only while open, so this captures the canvas at the moment it opened.
   const [text, setText] = useState(() => JSON.stringify(value, null, 2));

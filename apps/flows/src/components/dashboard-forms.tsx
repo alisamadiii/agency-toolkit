@@ -4,26 +4,9 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 
-import {
-  cancelRunAction,
-  createApiKeyAction,
-  createScheduleAction,
-  createWorkspaceAction,
-  deleteScheduleAction,
-  deleteSecretAction,
-  deleteWorkflowAction,
-  deleteWorkspaceAction,
-  putSecretAction,
-  revokeApiKeyAction,
-  rotateTriggerAction,
-  runWorkflowAction,
-  saveWorkflowAction,
-  toggleScheduleAction,
-  updateWorkspaceAction,
-  type ActionResult,
-} from '@/app/actions';
+import { createWorkspaceAction, deleteWorkspaceAction, updateWorkspaceAction, type ActionResult } from '@/app/actions';
+import { useApp } from '@/components/app-context';
 import { CopyText } from '@/components/copy-text';
-import { JsonEditor } from '@/components/json-editor';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -68,7 +51,13 @@ export function CreateWorkspaceForm() {
     >
       <div className="grid gap-1.5">
         <Label htmlFor="ws-name">Client name</Label>
-        <Input id="ws-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Salah Barbershop" required />
+        <Input
+          id="ws-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Salah Barbershop"
+          required
+        />
       </div>
       <div className="grid gap-1.5">
         <Label htmlFor="ws-hosts">Allowed hosts</Label>
@@ -105,7 +94,16 @@ export function WorkspaceSettingsForm(props: {
       className="grid gap-3"
       onSubmit={(e) => {
         e.preventDefault();
-        run(() => updateWorkspaceAction(props.id, { name, allowedHosts: hosts, maxWorkflows, maxConcurrentRuns }), 'Saved');
+        run(
+          () =>
+            updateWorkspaceAction(props.id, {
+              name,
+              allowedHosts: hosts,
+              maxWorkflows,
+              maxConcurrentRuns,
+            }),
+          'Saved',
+        );
       }}
     >
       <div className="grid gap-1.5">
@@ -162,9 +160,16 @@ export function WorkspaceSettingsForm(props: {
 
 // ---------- API keys ----------
 
-type KeyRow = { id: string; name: string; prefix: string; lastUsedAt: Date | null; revokedAt: Date | null };
+type KeyRow = {
+  id: string;
+  name: string;
+  prefix: string;
+  lastUsedAt: Date | null;
+  revokedAt: Date | null;
+};
 
 export function ApiKeys({ workspaceId, keys, path }: { workspaceId: string | null; keys: KeyRow[]; path: string }) {
+  const { createApiKeyAction, revokeApiKeyAction } = useApp().actions;
   const { pending, run } = useAction();
   const [name, setName] = useState('');
   const [created, setCreated] = useState<string | null>(null);
@@ -186,7 +191,12 @@ export function ApiKeys({ workspaceId, keys, path }: { workspaceId: string | nul
             <div className="min-w-0">
               <p className="truncate font-medium">{k.name}</p>
               <p className="font-mono text-xs text-muted-foreground">
-                {k.prefix}… · {k.revokedAt ? 'revoked' : k.lastUsedAt ? `used ${new Date(k.lastUsedAt).toLocaleString()}` : 'never used'}
+                {k.prefix}… ·{' '}
+                {k.revokedAt
+                  ? 'revoked'
+                  : k.lastUsedAt
+                    ? `used ${new Date(k.lastUsedAt).toLocaleString()}`
+                    : 'never used'}
               </p>
             </div>
             {!k.revokedAt && (
@@ -194,7 +204,9 @@ export function ApiKeys({ workspaceId, keys, path }: { workspaceId: string | nul
                 size="sm"
                 variant="ghost"
                 disabled={pending}
-                onClick={() => confirm(`Revoke "${k.name}"?`) && run(() => revokeApiKeyAction(k.id, path), 'Key revoked')}
+                onClick={() =>
+                  confirm(`Revoke "${k.name}"?`) && run(() => revokeApiKeyAction(k.id, path), 'Key revoked')
+                }
               >
                 Revoke
               </Button>
@@ -225,6 +237,8 @@ export function ApiKeys({ workspaceId, keys, path }: { workspaceId: string | nul
 // ---------- Secrets ----------
 
 export function Secrets({ workspaceId, names }: { workspaceId: string; names: string[] }) {
+  const { putSecretAction, deleteSecretAction } = useApp().actions;
+  const { canEdit } = useApp();
   const { pending, run } = useAction();
   const [name, setName] = useState('');
   const [value, setValue] = useState('');
@@ -236,104 +250,51 @@ export function Secrets({ workspaceId, names }: { workspaceId: string; names: st
         {names.map((n) => (
           <li key={n} className="flex items-center justify-between p-3">
             <code className="text-xs">{`{{secrets.${n}}}`}</code>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={pending}
-              onClick={() => confirm(`Delete ${n}?`) && run(() => deleteSecretAction(workspaceId, n), 'Deleted')}
-            >
-              Delete
-            </Button>
+            {canEdit && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={pending}
+                onClick={() => confirm(`Delete ${n}?`) && run(() => deleteSecretAction(workspaceId, n), 'Deleted')}
+              >
+                Delete
+              </Button>
+            )}
           </li>
         ))}
       </ul>
-      <form
-        className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          if (await run(() => putSecretAction(workspaceId, name, value), 'Secret saved')) {
-            setName('');
-            setValue('');
-          }
-        }}
-      >
-        <Input value={name} onChange={(e) => setName(e.target.value.toUpperCase())} placeholder="NAME" className="font-mono" />
-        <Input type="password" value={value} onChange={(e) => setValue(e.target.value)} placeholder="value" />
-        <Button type="submit" disabled={pending || !name}>
-          Save secret
-        </Button>
-      </form>
+      {canEdit && (
+        <form
+          className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (await run(() => putSecretAction(workspaceId, name, value), 'Secret saved')) {
+              setName('');
+              setValue('');
+            }
+          }}
+        >
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value.toUpperCase())}
+            placeholder="NAME"
+            className="font-mono"
+          />
+          <Input type="password" value={value} onChange={(e) => setValue(e.target.value)} placeholder="value" />
+          <Button type="submit" disabled={pending || !name}>
+            Save secret
+          </Button>
+        </form>
+      )}
     </div>
   );
 }
 
 // ---------- Workflows ----------
 
-export const EXAMPLE_WORKFLOW = {
-  name: 'Example: fetch and transform',
-  description: 'Calls an API, then shapes the response with a script.',
-  enabled: true,
-  timeoutSec: 120,
-  maxAttempts: 1,
-  steps: [
-    { id: 'fetch', type: 'http', method: 'GET', url: 'https://httpbin.org/get?client={{input.client}}' },
-    {
-      id: 'shape',
-      type: 'script',
-      code: 'export default async ({ input, steps }) => {\n  console.log("status", steps.fetch.output.status);\n  return { ok: steps.fetch.output.status === 200, client: input.client ?? null };\n};',
-    },
-  ],
-};
-
-export function WorkflowEditor({
-  workspaceId,
-  workflowId,
-  initial,
-}: {
-  workspaceId: string;
-  workflowId: string | null;
-  initial: string;
-}) {
-  const router = useRouter();
-  const { pending, run } = useAction();
-  const [value, setValue] = useState(initial);
-
-  return (
-    <div className="grid gap-3">
-      <JsonEditor value={value} onChange={setValue} />
-      <div className="flex justify-between gap-2">
-        {workflowId ? (
-          <Button
-            variant="destructive"
-            disabled={pending}
-            onClick={async () => {
-              if (!confirm('Delete this workflow, its schedules and runs?')) return;
-              if (await run(() => deleteWorkflowAction(workspaceId, workflowId), 'Workflow deleted')) {
-                router.push(`/w/${workspaceId}`);
-              }
-            }}
-          >
-            Delete
-          </Button>
-        ) : (
-          <span />
-        )}
-        <Button
-          disabled={pending}
-          onClick={async () => {
-            const data = await run(() => saveWorkflowAction(workspaceId, workflowId, value), 'Workflow saved');
-            if (data && data !== true && !workflowId) router.push(`/w/${workspaceId}/workflows/${data.id}`);
-            else if (data) router.refresh();
-          }}
-        >
-          {workflowId ? 'Save changes' : 'Create workflow'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 export function RunNow({ workspaceId, workflowId }: { workspaceId: string; workflowId: string }) {
+  const { runWorkflowAction } = useApp().actions;
+  const { paths } = useApp();
   const router = useRouter();
   const { pending, run } = useAction();
   const [input, setInput] = useState('{\n  "client": "demo"\n}');
@@ -345,7 +306,7 @@ export function RunNow({ workspaceId, workflowId }: { workspaceId: string; workf
         disabled={pending}
         onClick={async () => {
           const data = await run(() => runWorkflowAction(workspaceId, workflowId, input), 'Run queued');
-          if (data && data !== true) router.push(`/runs/${data.runId}`);
+          if (data && data !== true) router.push(paths.run(data.runId));
         }}
       >
         Run now
@@ -355,6 +316,7 @@ export function RunNow({ workspaceId, workflowId }: { workspaceId: string; workf
 }
 
 export function RotateTrigger({ workspaceId, workflowId }: { workspaceId: string; workflowId: string }) {
+  const { rotateTriggerAction } = useApp().actions;
   const { pending, run } = useAction();
   return (
     <Button
@@ -373,7 +335,14 @@ export function RotateTrigger({ workspaceId, workflowId }: { workspaceId: string
 
 // ---------- Schedules ----------
 
-type ScheduleRow = { id: string; cron: string; timezone: string; enabled: boolean; nextRunAt: Date; lastRunAt: Date | null };
+type ScheduleRow = {
+  id: string;
+  cron: string;
+  timezone: string;
+  enabled: boolean;
+  nextRunAt: Date;
+  lastRunAt: Date | null;
+};
 
 export function Schedules({
   workspaceId,
@@ -384,6 +353,8 @@ export function Schedules({
   workflowId: string;
   schedules: ScheduleRow[];
 }) {
+  const { createScheduleAction, toggleScheduleAction, deleteScheduleAction } = useApp().actions;
+  const { canEdit } = useApp();
   const { pending, run } = useAction();
   const [cron, setCron] = useState('*/15 * * * *');
   const [timezone, setTimezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
@@ -391,7 +362,11 @@ export function Schedules({
   return (
     <div className="grid gap-3">
       <ul className="divide-y rounded-md border text-sm">
-        {schedules.length === 0 && <li className="p-3 text-muted-foreground">No schedules. Runs only start from the API, trigger URL or Run now.</li>}
+        {schedules.length === 0 && (
+          <li className="p-3 text-muted-foreground">
+            No schedules. Runs only start from the API, trigger URL or Run now.
+          </li>
+        )}
         {schedules.map((s) => (
           <li key={s.id} className="flex items-center justify-between gap-3 p-3">
             <div className="min-w-0">
@@ -406,42 +381,64 @@ export function Schedules({
             <div className="flex items-center gap-2">
               <Switch
                 checked={s.enabled}
-                disabled={pending}
+                disabled={pending || !canEdit}
                 onCheckedChange={(enabled) => run(() => toggleScheduleAction(workspaceId, workflowId, s.id, enabled))}
               />
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={pending}
-                onClick={() => run(() => deleteScheduleAction(workspaceId, workflowId, s.id), 'Schedule deleted')}
-              >
-                Delete
-              </Button>
+              {canEdit && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={pending}
+                  onClick={() => run(() => deleteScheduleAction(workspaceId, workflowId, s.id), 'Schedule deleted')}
+                >
+                  Delete
+                </Button>
+              )}
             </div>
           </li>
         ))}
       </ul>
-      <form
-        className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
-        onSubmit={(e) => {
-          e.preventDefault();
-          run(() => createScheduleAction(workspaceId, workflowId, { cron, timezone }), 'Schedule added');
-        }}
-      >
-        <Input value={cron} onChange={(e) => setCron(e.target.value)} className="font-mono" placeholder="0 9 * * 1-5" />
-        <Input value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="America/New_York" />
-        <Button type="submit" disabled={pending}>
-          Add schedule
-        </Button>
-      </form>
+      {canEdit && (
+        <form
+          className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(
+              () =>
+                createScheduleAction(workspaceId, workflowId, {
+                  cron,
+                  timezone,
+                }),
+              'Schedule added',
+            );
+          }}
+        >
+          <Input
+            value={cron}
+            onChange={(e) => setCron(e.target.value)}
+            className="font-mono"
+            placeholder="0 9 * * 1-5"
+          />
+          <Input value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="America/New_York" />
+          <Button type="submit" disabled={pending}>
+            Add schedule
+          </Button>
+        </form>
+      )}
     </div>
   );
 }
 
 export function CancelRun({ workspaceId, runId }: { workspaceId: string; runId: string }) {
+  const { cancelRunAction } = useApp().actions;
   const { pending, run } = useAction();
   return (
-    <Button size="sm" variant="outline" disabled={pending} onClick={() => run(() => cancelRunAction(workspaceId, runId), 'Cancelling')}>
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={pending}
+      onClick={() => run(() => cancelRunAction(workspaceId, runId), 'Cancelling')}
+    >
       Cancel run
     </Button>
   );

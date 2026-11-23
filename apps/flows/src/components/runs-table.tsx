@@ -18,7 +18,15 @@ function duration(r: Row) {
   return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
 }
 
-export function RunsTable({ runs, showWorkflow = false }: { runs: Row[]; showWorkflow?: boolean }) {
+export function RunsTable({
+  runs,
+  showWorkflow = false,
+  runHref = (id) => `/runs/${id}`,
+}: {
+  runs: Row[];
+  showWorkflow?: boolean;
+  runHref?: (id: string) => string;
+}) {
   if (runs.length === 0) return <p className="text-sm text-muted-foreground">No runs yet.</p>;
   return (
     <div className="overflow-x-auto rounded-md border">
@@ -36,14 +44,14 @@ export function RunsTable({ runs, showWorkflow = false }: { runs: Row[]; showWor
           {runs.map((r) => (
             <tr key={r.id} className="hover:bg-muted/30">
               <td className="p-2">
-                <Link href={`/runs/${r.id}`} className="block">
+                <Link href={runHref(r.id)} className="block">
                   <StatusBadge status={r.status} />
                 </Link>
               </td>
               {showWorkflow && <td className="p-2">{r.workflowName}</td>}
               <td className="p-2 capitalize">{r.trigger}</td>
               <td className="p-2 whitespace-nowrap">
-                <Link href={`/runs/${r.id}`} className="hover:underline">
+                <Link href={runHref(r.id)} className="hover:underline">
                   {r.queuedAt.toLocaleString()}
                 </Link>
               </td>

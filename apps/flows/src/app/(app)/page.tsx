@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ApiKeys, CreateWorkspaceForm } from '@/components/dashboard-forms';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { db } from '@/db';
-import { run, workflow, workspace } from '@/db/schema';
+import { run, workspace } from '@/db/schema';
 import { listApiKeys } from '@/lib/service';
 
 export default async function HomePage() {
@@ -13,9 +13,11 @@ export default async function HomePage() {
       id: workspace.id,
       name: workspace.name,
       slug: workspace.slug,
-      workflows: dsql<number>`(SELECT count(*)::int FROM ${workflow} WHERE ${workflow.workspaceId} = ${workspace.id})`,
-      runs24h: dsql<number>`(SELECT count(*)::int FROM ${run} WHERE ${run.workspaceId} = ${workspace.id} AND ${run.queuedAt} > now() - interval '24 hours')`,
-      failed24h: dsql<number>`(SELECT count(*)::int FROM ${run} WHERE ${run.workspaceId} = ${workspace.id} AND ${run.status} IN ('failed','timeout') AND ${run.queuedAt} > now() - interval '24 hours')`,
+      // Qualified on purpose: inside a single-table select drizzle drops table names,
+      // which would make these subqueries compare their own columns.
+      workflows: dsql<number>`(SELECT count(*)::int FROM workflow wf WHERE wf.workspace_id = "workspace"."id")`,
+      runs24h: dsql<number>`(SELECT count(*)::int FROM run r WHERE r.workspace_id = "workspace"."id" AND r.queued_at > now() - interval '24 hours')`,
+      failed24h: dsql<number>`(SELECT count(*)::int FROM run r WHERE r.workspace_id = "workspace"."id" AND r.status IN ('failed','timeout') AND r.queued_at > now() - interval '24 hours')`,
     })
     .from(workspace)
     .orderBy(workspace.name);

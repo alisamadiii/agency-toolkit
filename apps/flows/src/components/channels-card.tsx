@@ -4,7 +4,7 @@ import { Bell, Loader2, Pencil, Plus, Send, Trash2 } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 
-import { createChannelAction, deleteChannelAction, testChannelAction, updateChannelAction } from '@/app/actions';
+import { useApp } from '@/components/app-context';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -28,6 +28,8 @@ const selectClass =
 
 // This workspace's own notification channels: used by Notify nodes and run alerts.
 export function ChannelsCard({ workspaceId, channels }: { workspaceId: string; channels: ChannelRow[] }) {
+  const { actions, canEdit } = useApp();
+  const { updateChannelAction, deleteChannelAction, testChannelAction } = actions;
   const [editing, setEditing] = useState<{ type: ChannelType; channel?: ChannelRow } | null>(null);
   const [picking, setPicking] = useState(false);
   const [pending, start] = useTransition();
@@ -86,7 +88,9 @@ export function ChannelsCard({ workspaceId, channels }: { workspaceId: string; c
               </p>
               <p className="truncate font-mono text-xs text-muted-foreground">{describe(c)}</p>
             </div>
-            <Switch checked={c.enabled} disabled={pending} onCheckedChange={(v) => toggle(c, v)} aria-label="Enabled" />
+            <Switch checked={c.enabled} disabled={pending || !canEdit} onCheckedChange={(v) => toggle(c, v)} aria-label="Enabled" />
+            {canEdit && (
+            <>
             <Button size="sm" variant="outline" disabled={testing === c.id} onClick={() => startTest(c)}>
               {testing === c.id ? <Loader2 className="animate-spin" /> : <Send />} Test
             </Button>
@@ -96,12 +100,16 @@ export function ChannelsCard({ workspaceId, channels }: { workspaceId: string; c
             <Button size="icon-sm" variant="ghost" disabled={pending} onClick={() => remove(c)} aria-label="Delete">
               <Trash2 />
             </Button>
+            </>
+            )}
           </li>
         ))}
       </ul>
-      <Button className="justify-self-start" onClick={() => setPicking(true)}>
-        <Plus /> Add channel
-      </Button>
+      {canEdit && (
+        <Button className="justify-self-start" onClick={() => setPicking(true)}>
+          <Plus /> Add channel
+        </Button>
+      )}
 
       <Dialog open={picking} onOpenChange={setPicking}>
         <DialogContent className="sm:max-w-2xl">
@@ -210,6 +218,7 @@ function ChannelForm({
   channel?: ChannelRow;
   onClose: () => void;
 }) {
+  const { createChannelAction, updateChannelAction } = useApp().actions;
   const spec = CHANNELS[type];
   const [name, setName] = useState(channel?.name ?? spec.label);
   const [values, setValues] = useState<Record<string, string>>(() => {

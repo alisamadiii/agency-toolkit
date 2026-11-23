@@ -238,6 +238,38 @@ try {
   check(cancelled.status === 'cancelled', 'running run can be cancelled', cancelled.status);
 
   check((await (await fetch(BASE + '/openapi.json')).json()).openapi === '3.1.0', 'OpenAPI spec served');
+
+  // --- Client hub embed (/iframe)
+  const ROOT = BASE.replace(/\/api\/v1$/, '');
+  const hubProject = `smoke-${Date.now()}`;
+  const embed = (role) => api(ADMIN, 'POST', '/embed-sessions', { projectId: hubProject, projectName: 'smoke-embed', role });
+  check((await api(keyA, 'POST', '/embed-sessions', { projectId: 'x', projectName: 'x', role: 'full-access' })).status === 403,
+    'embed sessions need the admin key');
+  const e1 = await embed('full-access');
+  const e2 = await embed('view-only');
+  created.push(e1.data.workspaceId);
+  check(e1.status === 201 && e1.data.workspaceId === e2.data.workspaceId, 'one workspace per hub project');
+  const start = await fetch(e1.data.url, { redirect: 'manual' });
+  const setCookie = start.headers.get('set-cookie') ?? '';
+  check(start.status === 303 && /flows_embed=.*HttpOnly.*Secure.*SameSite=None.*Partitioned/i.test(setCookie), 'ticket gives a locked-down cookie');
+  check((await fetch(e1.data.url, { redirect: 'manual' })).status === 401, 'ticket is single use');
+  const e3 = await embed('full-access');
+  check((await fetch(e3.data.url, { redirect: 'manual', headers: { referer: 'https://evil.example.com/' } })).status === 401,
+    'ticket refused from another site');
+  const cookieVal = setCookie.match(/flows_embed=([^;]+)/)[1];
+  const page = await fetch(ROOT + '/iframe', { redirect: 'manual', headers: { cookie: `flows_embed=${cookieVal}` } });
+  check(page.status === 200, 'embed session opens /iframe');
+  const [b64, mac] = cookieVal.split('.');
+  const forged = JSON.parse(Buffer.from(b64, 'base64url'));
+  forged.workspaceId = a.data.id;
+  const forgedVal = Buffer.from(JSON.stringify(forged)).toString('base64url') + '.' + mac;
+  const forgedPage = await fetch(ROOT + '/iframe', { redirect: 'manual', headers: { cookie: `flows_embed=${forgedVal}` } });
+  check(forgedPage.status === 307 && /expired/.test(forgedPage.headers.get('location') ?? ''), 'tampered cookie rejected');
+  const iframeCsp = page.headers.get('content-security-policy') ?? '';
+  check(/frame-ancestors [^;]*https:\/\/app\.alisamadii\.com/.test(iframeCsp) && !/'none'/.test(iframeCsp), '/iframe framable only by the hub', iframeCsp);
+  const signIn = await fetch(ROOT + '/sign-in', { redirect: 'manual' });
+  check(/frame-ancestors 'none'/.test(signIn.headers.get('content-security-policy') ?? '') && signIn.headers.get('x-frame-options') === 'DENY',
+    'dashboard cannot be framed');
 } finally {
   for (const id of created) await api(ADMIN, 'DELETE', `/workspaces/${id}`);
 }

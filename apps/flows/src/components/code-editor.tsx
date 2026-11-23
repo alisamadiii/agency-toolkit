@@ -3,7 +3,6 @@
 import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import CodeMirror, { EditorView } from '@uiw/react-codemirror';
-import { useTheme } from 'next-themes';
 
 import { cn } from '@/lib/utils';
 
@@ -21,14 +20,13 @@ export default function CodeEditor({
   height?: string;
   className?: string;
 }) {
-  const { resolvedTheme } = useTheme();
   return (
     <div className={cn('overflow-hidden rounded-md border text-xs', className)}>
       <CodeMirror
         value={value}
         onChange={onChange}
         height={height}
-        theme={resolvedTheme === 'dark' ? 'dark' : 'light'}
+        theme="light"
         extensions={[language === 'json' ? json() : javascript({ typescript: true }), EditorView.lineWrapping]}
         basicSetup={{ foldGutter: false, highlightActiveLine: false }}
       />
