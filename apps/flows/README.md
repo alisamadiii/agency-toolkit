@@ -80,6 +80,7 @@ ADMIN=fl_admin_...
 # 1. A workspace per client, and a key for it (the key is shown once)
 curl -s $URL/workspaces -H "authorization: Bearer $ADMIN" -H 'content-type: application/json' \
   -d '{"name":"Acme","allowedHosts":["api.acme.com","httpbin.org"]}'
+# Optional "id": use the client hub project id so the workspace shares it.
 curl -s $URL/workspaces/<workspaceId>/keys -H "authorization: Bearer $ADMIN" -H 'content-type: application/json' \
   -d '{"name":"client hub"}'
 KEY=fl_live_...
@@ -215,8 +216,9 @@ How a session starts:
 
 1. The hub's **server** calls `POST /api/v1/embed-sessions` with an **admin** key:
    `{ "projectId": "<hub project uuid>", "projectName": "Acme", "user": { "email", "name" }, "role": "full-access" | "content-editor" | "view-only" }`.
-   Flows finds the workspace for that project (`workspace.external_id`) or creates it, and
-   returns `{ url }`: a one-time link, valid for 60 seconds.
+   Flows finds the workspace for that project or creates it **with the same id as the hub
+   project** (also stored in `external_id`), so both systems share one identifier. It returns
+   `{ url, workspaceId }`: a one-time link, valid for 60 seconds.
 2. The hub puts the link in `<iframe src>`. `/iframe/start` checks the ticket (unused, not
    expired, referer is the hub), then sets an `HttpOnly; Secure; SameSite=None; Partitioned`
    cookie, signed with `MASTER_KEY` and pinned to that one workspace for 8 hours.

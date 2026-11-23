@@ -64,6 +64,10 @@ export async function getWorkspace(id: string) {
 
 export async function createWorkspace(input: z.output<typeof workspaceCreateSchema>) {
   checkHosts(input.allowedHosts);
+  if (input.id) {
+    const [exists] = await db.select({ id: workspace.id }).from(workspace).where(eq(workspace.id, input.id));
+    if (exists) throw new ServiceError(409, 'A workspace with this id already exists');
+  }
   let slug = input.slug ?? slugify(input.name);
   const [taken] = await db.select({ id: workspace.id }).from(workspace).where(eq(workspace.slug, slug));
   if (taken) {
@@ -72,7 +76,8 @@ export async function createWorkspace(input: z.output<typeof workspaceCreateSche
   }
   const [row] = await db
     .insert(workspace)
-    .values({ ...input, slug, signingSecret: encrypt(randomToken(32)) })
+    // A given id (e.g. a hub project id) also becomes the external link.
+    .values({ ...input, slug, externalId: input.id ?? null, signingSecret: encrypt(randomToken(32)) })
     .returning();
   return row;
 }

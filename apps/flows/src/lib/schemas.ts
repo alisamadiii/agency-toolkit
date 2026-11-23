@@ -251,6 +251,8 @@ export const runCreateSchema = z.object({
 });
 
 export const workspaceCreateSchema = z.object({
+  // Optional fixed id, e.g. the client hub project id so both share one identifier.
+  id: z.uuid().optional(),
   name: z.string().min(1).max(200),
   slug: z
     .string()

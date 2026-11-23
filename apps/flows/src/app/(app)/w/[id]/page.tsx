@@ -47,7 +47,10 @@ export default async function WorkspacePage({ params, searchParams }: PageProps<
           ← Workspaces
         </Link>
         <h1 className="text-2xl font-semibold">{ws.name}</h1>
-        <p className="font-mono text-xs text-muted-foreground">workspace id {ws.id}</p>
+        <p className="font-mono text-xs text-muted-foreground">
+          workspace id {ws.id}
+          {ws.externalId && (ws.externalId === ws.id ? ' · same as its client hub project id' : ` · client hub project ${ws.externalId}`)}
+        </p>
       </div>
 
       <Tabs defaultValue={TABS.includes(tab as string) ? (tab as string) : 'workflows'} className="grid gap-4">

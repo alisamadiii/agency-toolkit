@@ -6,8 +6,8 @@ import { createEmbedTicket } from '@/lib/embed';
 import { baseUrl } from '@/lib/present';
 
 const schema = z.object({
-  // The client hub project id. Each one maps to exactly one workspace.
-  projectId: z.string().min(1).max(200),
+  // The client hub project id (uuid). Its workspace gets the same id.
+  projectId: z.uuid(),
   projectName: z.string().min(1).max(200),
   user: z
     .object({ id: z.string().max(200).optional(), email: z.string().max(320).optional(), name: z.string().max(200).optional() })

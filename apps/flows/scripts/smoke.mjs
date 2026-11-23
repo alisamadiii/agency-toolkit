@@ -241,7 +241,7 @@ try {
 
   // --- Client hub embed (/iframe)
   const ROOT = BASE.replace(/\/api\/v1$/, '');
-  const hubProject = `smoke-${Date.now()}`;
+  const hubProject = crypto.randomUUID();
   const embed = (role) => api(ADMIN, 'POST', '/embed-sessions', { projectId: hubProject, projectName: 'smoke-embed', role });
   check((await api(keyA, 'POST', '/embed-sessions', { projectId: 'x', projectName: 'x', role: 'full-access' })).status === 403,
     'embed sessions need the admin key');
@@ -249,6 +249,14 @@ try {
   const e2 = await embed('view-only');
   created.push(e1.data.workspaceId);
   check(e1.status === 201 && e1.data.workspaceId === e2.data.workspaceId, 'one workspace per hub project');
+  check(e1.data.workspaceId === hubProject, 'workspace id equals the hub project id', e1.data.workspaceId);
+  check((await api(ADMIN, 'POST', '/embed-sessions', { projectId: 'not-a-uuid', projectName: 'x', role: 'view-only' })).status === 400,
+    'hub project id must be a uuid');
+  const linkedId = crypto.randomUUID();
+  const linked = await api(ADMIN, 'POST', '/workspaces', { id: linkedId, name: 'smoke-linked' });
+  created.push(linked.data?.id);
+  check(linked.status === 201 && linked.data.id === linkedId && linked.data.externalId === linkedId, 'admin can create a workspace with a given (hub) id');
+  check((await api(ADMIN, 'POST', '/workspaces', { id: linkedId, name: 'dup' })).status === 409, 'duplicate workspace id rejected');
   const start = await fetch(e1.data.url, { redirect: 'manual' });
   const setCookie = start.headers.get('set-cookie') ?? '';
   check(start.status === 303 && /flows_embed=.*HttpOnly.*Secure.*SameSite=None.*Partitioned/i.test(setCookie), 'ticket gives a locked-down cookie');

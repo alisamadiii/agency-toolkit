@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 
-import { and, eq, gt, isNull } from 'drizzle-orm';
+import { and, eq, gt, isNull, or } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 
 import { db } from '@/db';
@@ -40,8 +40,12 @@ export async function createEmbedTicket(input: {
   user: EmbedUser;
   role: EmbedRole;
 }) {
-  // One workspace per hub project, created on first open.
-  let [ws] = await db.select().from(workspace).where(eq(workspace.externalId, input.projectId));
+  // One workspace per hub project. Its id IS the hub project id, so both systems share
+  // the same identifier (external_id keeps the link explicit as well).
+  let [ws] = await db
+    .select()
+    .from(workspace)
+    .where(or(eq(workspace.id, input.projectId), eq(workspace.externalId, input.projectId)));
   if (!ws) {
     const hosts = (process.env.EMBED_DEFAULT_ALLOWED_HOSTS ?? '*')
       .split(',')
@@ -51,16 +55,17 @@ export async function createEmbedTicket(input: {
     [ws] = await db
       .insert(workspace)
       .values({
+        id: input.projectId,
         name: input.projectName,
         slug,
         externalId: input.projectId,
         allowedHosts: hosts,
         signingSecret: encrypt(randomToken(32)),
       })
-      .onConflictDoNothing({ target: workspace.externalId })
+      .onConflictDoNothing()
       .returning();
     // Lost a race with a parallel first open: use the one that won.
-    if (!ws) [ws] = await db.select().from(workspace).where(eq(workspace.externalId, input.projectId));
+    if (!ws) [ws] = await db.select().from(workspace).where(eq(workspace.id, input.projectId));
   } else if (input.projectName && ws.name !== input.projectName) {
     // Keep the name in sync with the hub.
     await db.update(workspace).set({ name: input.projectName }).where(eq(workspace.id, ws.id));
